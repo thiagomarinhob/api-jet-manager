@@ -7,11 +7,11 @@ build:
 	@echo "Building..."
 	
 	
-	@go build -o main cmd/api/main.go
+	@go build -o main cmd/server/main.go
 
 # Run the application
 run:
-	@go run cmd/api/main.go
+	@go run cmd/server/main.go
 # Create DB container
 docker-run:
 	@if docker compose up --build 2>/dev/null; then \
