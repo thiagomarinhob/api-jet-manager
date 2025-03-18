@@ -50,12 +50,12 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	restaurantHandler := handlers.NewRestaurantHandler(restaurantService, authService)
 
 	// Rotas públicas
-	router.POST("/api/auth/login", authHandler.Login)
-	router.POST("/api/auth/register-superadmin", authHandler.RegisterSuperAdmin) // Rota para o primeiro superadmin
-	router.POST("/api/auth/register-admin", authHandler.Register)
+	router.POST("/v1/auth/login", authHandler.Login)
+	router.POST("/v1/auth/register-superadmin", authHandler.RegisterSuperAdmin) // Rota para o primeiro superadmin
+	router.POST("/v1/auth/register-admin", authHandler.Register)
 
 	// Grupo de rotas autenticadas
-	api := router.Group("/api")
+	api := router.Group("/v1")
 	api.Use(middlewares.AuthMiddleware(jwtService))
 
 	// Rotas de perfil de usuário

@@ -1,12 +1,13 @@
 package middlewares
 
 import (
+	"fmt"
 	"net/http"
-	"strconv"
 
 	"api-jet-manager/internal/domain/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // RestaurantMiddleware garante que usuários só possam acessar dados do seu próprio restaurante
@@ -38,6 +39,22 @@ func RestaurantMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Converte o restaurantID para string, independente do tipo real
+		var restaurantIDStr string
+
+		// Tenta diferentes conversões possíveis
+		switch v := restaurantID.(type) {
+		case string:
+			restaurantIDStr = v
+		case uuid.UUID:
+			restaurantIDStr = v.String()
+		case fmt.Stringer: // Para qualquer tipo que implementa String()
+			restaurantIDStr = v.String()
+		default:
+			// Para qualquer outro tipo, tenta imprimir como string
+			restaurantIDStr = fmt.Sprintf("%v", restaurantID)
+		}
+
 		// Verifica se o ID do restaurante está na URL
 		requestedRestaurantID := c.Param("restaurant_id")
 		if requestedRestaurantID == "" {
@@ -50,8 +67,8 @@ func RestaurantMiddleware() gin.HandlerFunc {
 		if requestedRestaurantID == "" && (c.Request.Method == "POST" || c.Request.Method == "PUT") {
 			var requestBody map[string]interface{}
 			if err := c.ShouldBindJSON(&requestBody); err == nil {
-				if id, ok := requestBody["restaurant_id"].(float64); ok {
-					requestedRestaurantID = strconv.FormatUint(uint64(id), 10)
+				if id, ok := requestBody["restaurant_id"].(string); ok {
+					requestedRestaurantID = id
 				}
 				// Restaura o body para que possa ser lido novamente pelos handlers
 				body, _ := c.Request.GetBody()
@@ -61,26 +78,19 @@ func RestaurantMiddleware() gin.HandlerFunc {
 
 		// Se ainda não encontrou o restaurant_id, usa o do usuário
 		if requestedRestaurantID == "" {
-			c.Set("requested_restaurant_id", restaurantID)
+			c.Set("requested_restaurant_id", restaurantIDStr)
 			c.Next()
 			return
 		}
 
-		// Converte o ID do restaurante requisitado para uint
-		reqID, err := strconv.ParseUint(requestedRestaurantID, 10, 32)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID"})
-			return
-		}
-
 		// Verifica se o usuário pertence ao restaurante requisitado
-		if restaurantID.(uint) != uint(reqID) {
+		if restaurantIDStr != requestedRestaurantID {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "you don't have access to this restaurant"})
 			return
 		}
 
 		// Armazena o ID do restaurante requisitado no contexto
-		c.Set("requested_restaurant_id", uint(reqID))
+		c.Set("requested_restaurant_id", requestedRestaurantID)
 		c.Next()
 	}
 }
