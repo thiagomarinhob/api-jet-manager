@@ -22,7 +22,7 @@ type UserType string
 type TableStatus string
 type OrderStatus string
 type OrderType string
-type ProductCategory string
+type ProductType string
 type TransactionType string
 type TransactionCategory string
 type SubscriptionStatus string
@@ -54,9 +54,9 @@ const (
 	OrderTypeTakeaway OrderType = "takeaway"
 
 	// ProductCategory
-	ProductCategoryFood    ProductCategory = "food"
-	ProductCategoryDrink   ProductCategory = "drink"
-	ProductCategoryDessert ProductCategory = "dessert"
+	ProductCategoryFood    ProductType = "food"
+	ProductCategoryDrink   ProductType = "drink"
+	ProductCategoryDessert ProductType = "dessert"
 
 	// TransactionType
 	TransactionTypeIncome  TransactionType = "income"
@@ -116,15 +116,26 @@ type Table struct {
 	UpdatedAt      time.Time
 }
 
+type ProductCategory struct {
+	ID           uuid.UUID `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	RestaurantID uuid.UUID `gorm:"type:uuid;not null"`
+	Name         string    `gorm:"size:100;not null"`
+	Description  string    `gorm:"size:255"`
+	Active       bool      `gorm:"default:true"`
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type Product struct {
-	ID           uuid.UUID       `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	RestaurantID uuid.UUID       `gorm:"type:uuid;not null"`
-	Name         string          `gorm:"size:100;not null"`
-	Description  string          `gorm:"size:255"`
-	Price        float64         `gorm:"not null"`
-	Category     ProductCategory `gorm:"size:20;not null"`
-	InStock      bool            `gorm:"default:true"`
-	ImageURL     string          `gorm:"size:255"`
+	ID           uuid.UUID   `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	RestaurantID uuid.UUID   `gorm:"type:uuid;not null"`
+	Name         string      `gorm:"size:100;not null"`
+	Description  string      `gorm:"size:255"`
+	Price        float64     `gorm:"not null"`
+	CategoryID   uuid.UUID   `gorm:"type:uuid;not null"`
+	Type         ProductType `gorm:"size:20;not null"`
+	InStock      bool        `gorm:"default:true"`
+	ImageURL     string      `gorm:"size:255"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
@@ -198,11 +209,23 @@ var (
 		"Fusão de sabores asiáticos com toque contemporâneo",
 	}
 
+	// Categorias padrão para produtos
+	defaultCategories = []struct {
+		Name        string
+		Description string
+	}{
+		{"Pratos Principais", "Pratos principais do cardápio"},
+		{"Entradas", "Entradas e aperitivos"},
+		{"Bebidas Não Alcoólicas", "Refrigerantes, sucos e água"},
+		{"Bebidas Alcoólicas", "Cervejas, vinhos e drinks"},
+		{"Sobremesas", "Doces e sobremesas"},
+	}
+
 	// Categorias de alimentos
 	foodItems = []struct {
 		Name        string
 		Description string
-		Category    ProductCategory
+		Type        ProductType
 		Price       float64
 	}{
 		{"Feijoada Completa", "Tradicional prato brasileiro com arroz, farofa e couve", ProductCategoryFood, 49.90},
@@ -353,6 +376,10 @@ var (
 	}
 )
 
+func generateUUID() uuid.UUID {
+	return uuid.New()
+}
+
 func main() {
 	rand.Seed(time.Now().UnixNano())
 
@@ -412,6 +439,7 @@ func createSuperAdmin(db *gorm.DB) {
 	log.Println("Criando superadmin...")
 	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("superadmin"), bcrypt.DefaultCost)
 	superadmin := User{
+		ID:       generateUUID(),
 		Name:     "Super Admin",
 		Email:    "superadmin@example.com",
 		Password: string(hashedPassword),
@@ -423,24 +451,30 @@ func createSuperAdmin(db *gorm.DB) {
 func createRestaurants(db *gorm.DB) {
 	log.Println("Criando restaurantes e dados relacionados...")
 
-	// Criar entre 5 e 10 restaurantes
-	numRestaurants := rand.Intn(6) + 5
+	// Criar entre 5 e 10 restaurantes rand.Intn(6) + 5
+	numRestaurants := 1
 	for i := 0; i < numRestaurants; i++ {
 		// Cria restaurante
 		restaurant := createRestaurant(db, i)
 
 		// Cria funcionários para o restaurante
-		createUsers(db, restaurant.ID)
+		users := createUsers(db, restaurant.ID)
 
+		fmt.Println("USERS == ", users)
+
+		categories := createProductCategories(db, restaurant.ID)
+
+		fmt.Println("Categories == ", categories)
 		// Cria produtos (menu)
-		createProducts(db, restaurant.ID)
-
+		products := createProducts(db, restaurant.ID, categories)
+		fmt.Println("Products == ", products)
 		// Cria mesas
-		createTables(db, restaurant.ID)
-
+		tables := createTables(db, restaurant.ID)
+		fmt.Println("Tables == ", tables)
 		// Cria pedidos
-		// orders := createOrders(db, restaurant.ID, users, tables, products)
-		// fmt.Println(orders)
+		orders := createOrders(db, restaurant.ID, users, tables, products)
+		fmt.Println(orders)
+
 		// Cria transações financeiras
 		// createFinancialTransactions(db, restaurant.ID, users, orders)
 	}
@@ -459,6 +493,7 @@ func createRestaurant(db *gorm.DB, index int) Restaurant {
 	}
 
 	restaurant := Restaurant{
+		ID:          generateUUID(),
 		Name:        restaurantNames[index%len(restaurantNames)],
 		Description: restaurantDescriptions[index%len(restaurantDescriptions)],
 		Address:     addresses[index%len(addresses)],
@@ -484,6 +519,7 @@ func createUsers(db *gorm.DB, restaurantID uuid.UUID) []User {
 	// Cria um admin
 	adminPassword, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
 	admin := User{
+		ID:           generateUUID(),
 		Name:         staffNames[0],
 		Email:        fmt.Sprintf("admin@%s.example.com", restaurantID),
 		Password:     string(adminPassword),
@@ -501,6 +537,7 @@ func createUsers(db *gorm.DB, restaurantID uuid.UUID) []User {
 		managerPassword, _ := bcrypt.GenerateFromPassword([]byte("manager123"), bcrypt.DefaultCost)
 		staffIndex := (i + 1) % len(staffNames)
 		manager := User{
+			ID:           generateUUID(),
 			Name:         staffNames[staffIndex],
 			Email:        fmt.Sprintf("manager%d@%s.example.com", i+1, restaurantID),
 			Password:     string(managerPassword),
@@ -519,6 +556,7 @@ func createUsers(db *gorm.DB, restaurantID uuid.UUID) []User {
 		staffPassword, _ := bcrypt.GenerateFromPassword([]byte("staff123"), bcrypt.DefaultCost)
 		staffIndex := (i + 1 + numManagers) % len(staffNames)
 		staff := User{
+			ID:           generateUUID(),
 			Name:         staffNames[staffIndex],
 			Email:        fmt.Sprintf("staff%d@%s.example.com", i+1, restaurantID),
 			Password:     string(staffPassword),
@@ -534,7 +572,33 @@ func createUsers(db *gorm.DB, restaurantID uuid.UUID) []User {
 	return users
 }
 
-func createProducts(db *gorm.DB, restaurantID uuid.UUID) []Product {
+// NOVA FUNÇÃO: Cria categorias de produtos para um restaurante
+func createProductCategories(db *gorm.DB, restaurantID uuid.UUID) []ProductCategory {
+	log.Printf("Criando categorias de produtos para o restaurante %s...", restaurantID)
+
+	var productCategory []ProductCategory
+
+	// Cria as categorias padrão
+	for _, catInfo := range defaultCategories {
+		category := ProductCategory{
+			ID:           generateUUID(),
+			RestaurantID: restaurantID,
+			Name:         catInfo.Name,
+			Description:  catInfo.Description,
+			Active:       true,
+			CreatedAt:    time.Now().AddDate(0, -rand.Intn(3), 0), // Entre 0 e 3 meses atrás
+		}
+		category.UpdatedAt = category.CreatedAt
+
+		db.Create(&category)
+		productCategory = append(productCategory, category)
+	}
+
+	log.Printf("Criadas %d categorias para o restaurante %s", len(productCategory), restaurantID)
+	return productCategory
+}
+
+func createProducts(db *gorm.DB, restaurantID uuid.UUID, productCategories []ProductCategory) []Product {
 	var products []Product
 
 	// Cria seleção de produtos do menu
@@ -548,11 +612,13 @@ func createProducts(db *gorm.DB, restaurantID uuid.UUID) []Product {
 		price := food.Price * (1 + priceVariation)
 
 		product := Product{
+			ID:           generateUUID(),
 			RestaurantID: restaurantID,
 			Name:         food.Name,
 			Description:  food.Description,
 			Price:        float64(int(price*100)) / 100, // Arredonda para 2 casas decimais
-			Category:     food.Category,
+			CategoryID:   productCategories[rand.Intn(len(productCategories))].ID,
+			Type:         food.Type,
 			InStock:      rand.Float64() < 0.9, // 90% dos produtos estão em estoque
 			ImageURL:     fmt.Sprintf("https://example.com/products/%d.jpg", i+1),
 			CreatedAt:    time.Now().AddDate(0, -rand.Intn(3), 0), // Entre 0 e 3 meses atrás
@@ -586,6 +652,7 @@ func createTables(db *gorm.DB, restaurantID uuid.UUID) []Table {
 		}
 
 		table := Table{
+			ID:           generateUUID(),
 			RestaurantID: restaurantID,
 			Number:       i + 1,
 			Capacity:     capacity,
@@ -684,6 +751,7 @@ func createOrders(db *gorm.DB, restaurantID uuid.UUID, users []User, tables []Ta
 
 		// Cria o pedido
 		order := Order{
+			ID:              generateUUID(),
 			RestaurantID:    restaurantID,
 			TableID:         tableID,
 			UserID:          user.ID,
@@ -756,6 +824,7 @@ func createOrderItems(db *gorm.DB, orderID uuid.UUID, products []Product) float6
 
 		// Cria o item do pedido
 		item := OrderItem{
+			ID:        generateUUID(),
 			OrderID:   orderID,
 			ProductID: product.ID,
 			Quantity:  quantity,
@@ -794,6 +863,7 @@ func createFinancialTransactions(db *gorm.DB, restaurantID uuid.UUID, users []Us
 
 			// Cria transação de receita
 			transaction := FinancialTransaction{
+				ID:            generateUUID(),
 				RestaurantID:  restaurantID,
 				Type:          TransactionTypeIncome,
 				Category:      TransactionCategorySales,
@@ -857,6 +927,7 @@ func createFinancialTransactions(db *gorm.DB, restaurantID uuid.UUID, users []Us
 
 			// Cria a transação
 			transaction := FinancialTransaction{
+				ID:            generateUUID(),
 				RestaurantID:  restaurantID,
 				Type:          TransactionTypeExpense,
 				Category:      category,
