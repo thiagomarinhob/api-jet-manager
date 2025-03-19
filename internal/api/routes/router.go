@@ -31,6 +31,7 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	orderRepo := repoImpl.NewPostgresOrderRepository(db)
 	financeRepo := repoImpl.NewPostgresFinanceRepository(db)
 	productRepo := repoImpl.NewPostgresProductRepository(db)
+	productCategoryRepo := repoImpl.NewPostgresProductCategoryRepository(db)
 	restaurantRepo := repoImpl.NewPostgresRestaurantRepository(db)
 
 	// Serviços
@@ -39,6 +40,7 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	orderService := services.NewOrderService(orderRepo, tableRepo, financeRepo, productRepo)
 	financeService := services.NewFinanceService(financeRepo)
 	productService := services.NewProductService(productRepo)
+	productCategoryService := services.NewProductCategoryService(productCategoryRepo)
 	restaurantService := services.NewRestaurantService(restaurantRepo)
 
 	// Handlers
@@ -46,7 +48,8 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	tableHandler := handlers.NewTableHandler(tableService)
 	orderHandler := handlers.NewOrderHandler(orderService, tableService)
 	financeHandler := handlers.NewFinanceHandler(financeService)
-	productHandler := handlers.NewProductHandler(productService)
+	productHandler := handlers.NewProductHandler(productService, productCategoryService)
+	productCategoryHandler := handlers.NewProductCategoryHandler(productCategoryService)
 	restaurantHandler := handlers.NewRestaurantHandler(restaurantService, authService)
 
 	// Rotas públicas
@@ -81,6 +84,15 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	restaurantsApi.POST("/:restaurant_id/users", middlewares.RestaurantMiddleware(),
 		middlewares.UserTypeMiddleware(models.UserTypeAdmin, models.UserTypeManager),
 		authHandler.Register)
+
+	// Rotas de categorias (agrupadas por restaurante)
+	restaurantsApi.POST("/:restaurant_id/categories", productCategoryHandler.Create)
+	restaurantsApi.GET("/:restaurant_id/categories", productCategoryHandler.List)
+	restaurantsApi.GET("/:restaurant_id/categories/active", productCategoryHandler.ListActive)
+	restaurantsApi.GET("/:restaurant_id/categories/:category_id", productCategoryHandler.GetByID)
+	restaurantsApi.PUT("/:restaurant_id/categories/:category_id", productCategoryHandler.Update)
+	restaurantsApi.DELETE("/:restaurant_id/categories/:category_id", productCategoryHandler.Delete)
+	restaurantsApi.PATCH("/:restaurant_id/categories/:category_id/status", productCategoryHandler.UpdateStatus)
 
 	// Rotas de mesas (agrupadas por restaurante)
 	restaurantsApi.GET("/:restaurant_id/tables", middlewares.RestaurantMiddleware(), tableHandler.List)

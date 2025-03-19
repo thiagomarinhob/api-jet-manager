@@ -3,6 +3,8 @@ package repositories
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"api-jet-manager/internal/domain/models"
 	"api-jet-manager/internal/infrastructure/database"
@@ -27,7 +29,7 @@ func (r *PostgresProductRepository) Create(product *models.Product) error {
 
 func (r *PostgresProductRepository) FindByID(id uuid.UUID) (*models.Product, error) {
 	var product models.Product
-	if err := r.DB.Where("id = ?", id).First(&product, id).Error; err != nil {
+	if err := r.DB.First(&product, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("product not found")
 		}
@@ -41,20 +43,20 @@ func (r *PostgresProductRepository) Update(product *models.Product) error {
 }
 
 func (r *PostgresProductRepository) Delete(id uuid.UUID) error {
-	return r.DB.Delete(&models.Product{}, id).Error
+	return r.DB.Delete(&models.Product{}, "id = ?", id).Error
 }
 
-func (r *PostgresProductRepository) List() ([]models.Product, error) {
+func (r *PostgresProductRepository) FindByRestaurant(restaurantID uuid.UUID) ([]models.Product, error) {
 	var products []models.Product
-	if err := r.DB.Find(&products).Error; err != nil {
+	if err := r.DB.Where("restaurant_id = ?", restaurantID).Find(&products).Error; err != nil {
 		return nil, err
 	}
 	return products, nil
 }
 
-func (r *PostgresProductRepository) FindByCategory(category models.ProductCategory) ([]models.Product, error) {
+func (r *PostgresProductRepository) FindByCategory(restaurantID uuid.UUID, category models.ProductCategory) ([]models.Product, error) {
 	var products []models.Product
-	if err := r.DB.Where("category = ?", category).Find(&products).Error; err != nil {
+	if err := r.DB.Where("restaurant_id = ? AND category = ?", restaurantID, category).Find(&products).Error; err != nil {
 		return nil, err
 	}
 	return products, nil
@@ -62,4 +64,76 @@ func (r *PostgresProductRepository) FindByCategory(category models.ProductCatego
 
 func (r *PostgresProductRepository) UpdateStock(id uuid.UUID, inStock bool) error {
 	return r.DB.Model(&models.Product{}).Where("id = ?", id).Update("in_stock", inStock).Error
+}
+
+// FindWithFilters implementa a busca paginada com filtros e ordenação
+func (r *PostgresProductRepository) FindWithFilters(
+	restaurantID uuid.UUID,
+	offset int,
+	limit int,
+	category *models.ProductCategory,
+	inStock *bool,
+	nameSearch string,
+	sortBy string,
+	sortOrder string,
+) ([]models.Product, int64, error) {
+	// Construir a query base
+	query := r.DB.Model(&models.Product{}).Where("restaurant_id = ?", restaurantID)
+
+	// Aplicar filtros se fornecidos
+	if category != nil {
+		query = query.Where("category = ?", *category)
+	}
+
+	if inStock != nil {
+		query = query.Where("in_stock = ?", *inStock)
+	}
+
+	if nameSearch != "" {
+		query = query.Where("name ILIKE ?", "%"+nameSearch+"%")
+	}
+
+	// Contar total de itens antes de aplicar paginação
+	var totalItems int64
+	if err := query.Count(&totalItems).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Validar e aplicar ordenação
+	if isValidSortField(sortBy) {
+		// Garantir que sortOrder é válido
+		if strings.ToLower(sortOrder) != "asc" && strings.ToLower(sortOrder) != "desc" {
+			sortOrder = "asc"
+		}
+
+		query = query.Order(fmt.Sprintf("%s %s", sortBy, sortOrder))
+	} else {
+		// Ordenação padrão se o campo for inválido
+		query = query.Order("name asc")
+	}
+
+	// Aplicar paginação
+	query = query.Offset(offset).Limit(limit)
+
+	// Executar a consulta
+	var products []models.Product
+	if err := query.Find(&products).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return products, totalItems, nil
+}
+
+// Função auxiliar para validar campos de ordenação
+func isValidSortField(field string) bool {
+	validFields := map[string]bool{
+		"name":       true,
+		"price":      true,
+		"category":   true,
+		"in_stock":   true,
+		"created_at": true,
+		"updated_at": true,
+	}
+
+	return validFields[field]
 }
