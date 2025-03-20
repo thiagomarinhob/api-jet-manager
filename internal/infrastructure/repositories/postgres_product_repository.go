@@ -80,6 +80,9 @@ func (r *PostgresProductRepository) FindWithFilters(
 	// Construir a query base
 	query := r.DB.Model(&models.Product{}).Where("restaurant_id = ?", restaurantID)
 
+	// Pré-carregar a categoria
+	query = query.Preload("Category")
+
 	// Aplicar filtros se fornecidos
 	if category != nil {
 		query = query.Where("category = ?", *category)

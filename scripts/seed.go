@@ -127,17 +127,18 @@ type ProductCategory struct {
 }
 
 type Product struct {
-	ID           uuid.UUID   `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	RestaurantID uuid.UUID   `gorm:"type:uuid;not null"`
-	Name         string      `gorm:"size:100;not null"`
-	Description  string      `gorm:"size:255"`
-	Price        float64     `gorm:"not null"`
-	CategoryID   uuid.UUID   `gorm:"type:uuid;not null"`
-	Type         ProductType `gorm:"size:20;not null"`
-	InStock      bool        `gorm:"default:true"`
-	ImageURL     string      `gorm:"size:255"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID              uuid.UUID        `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	RestaurantID    uuid.UUID        `gorm:"type:uuid;not null"`
+	Name            string           `gorm:"size:100;not null"`
+	Description     string           `gorm:"size:255"`
+	Price           float64          `gorm:"not null"`
+	CategoryID      uuid.UUID        `gorm:"type:uuid;not null"`
+	ProductCategory *ProductCategory `json:"category,omitempty" gorm:"foreignKey:CategoryID"`
+	Type            ProductType      `gorm:"size:20;not null"`
+	InStock         bool             `gorm:"default:true"`
+	ImageURL        string           `gorm:"size:255"`
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type Order struct {
@@ -472,8 +473,8 @@ func createRestaurants(db *gorm.DB) {
 		tables := createTables(db, restaurant.ID)
 		fmt.Println("Tables == ", tables)
 		// Cria pedidos
-		orders := createOrders(db, restaurant.ID, users, tables, products)
-		fmt.Println(orders)
+		// orders := createOrders(db, restaurant.ID, users, tables, products)
+		// fmt.Println(orders)
 
 		// Cria transações financeiras
 		// createFinancialTransactions(db, restaurant.ID, users, orders)
@@ -611,17 +612,20 @@ func createProducts(db *gorm.DB, restaurantID uuid.UUID, productCategories []Pro
 		priceVariation := rand.Float64()*0.2 - 0.1 // Entre -10% e +10%
 		price := food.Price * (1 + priceVariation)
 
+		var indexC = rand.Intn(len(productCategories))
+
 		product := Product{
-			ID:           generateUUID(),
-			RestaurantID: restaurantID,
-			Name:         food.Name,
-			Description:  food.Description,
-			Price:        float64(int(price*100)) / 100, // Arredonda para 2 casas decimais
-			CategoryID:   productCategories[rand.Intn(len(productCategories))].ID,
-			Type:         food.Type,
-			InStock:      rand.Float64() < 0.9, // 90% dos produtos estão em estoque
-			ImageURL:     fmt.Sprintf("https://example.com/products/%d.jpg", i+1),
-			CreatedAt:    time.Now().AddDate(0, -rand.Intn(3), 0), // Entre 0 e 3 meses atrás
+			ID:              generateUUID(),
+			RestaurantID:    restaurantID,
+			Name:            food.Name,
+			Description:     food.Description,
+			Price:           float64(int(price*100)) / 100, // Arredonda para 2 casas decimais
+			CategoryID:      productCategories[indexC].ID,
+			ProductCategory: &productCategories[indexC],
+			Type:            food.Type,
+			InStock:         rand.Float64() < 0.9, // 90% dos produtos estão em estoque
+			ImageURL:        fmt.Sprintf("https://example.com/products/%d.jpg", i+1),
+			CreatedAt:       time.Now().AddDate(0, -rand.Intn(3), 0), // Entre 0 e 3 meses atrás
 		}
 		product.UpdatedAt = product.CreatedAt
 		db.Create(&product)

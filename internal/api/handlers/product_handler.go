@@ -114,6 +114,7 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		Description:  req.Description,
 		Price:        req.Price,
 		CategoryID:   categoryUUID,
+		Category:     category,
 		Type:         productType,
 		InStock:      req.InStock,
 		ImageURL:     req.ImageURL,
