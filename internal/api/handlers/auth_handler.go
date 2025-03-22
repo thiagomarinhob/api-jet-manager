@@ -235,13 +235,20 @@ func (h *AuthHandler) RegisterSuperAdmin(c *gin.Context) {
 
 // GetProfile - obtém o perfil do usuário atual
 func (h *AuthHandler) GetProfile(c *gin.Context) {
-	userID, exists := c.Get("user_id")
+	userIDStr, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	user, err := h.authService.GetUserByID(userID.(uuid.UUID))
+	// Converter a string para UUID
+	userID, err := uuid.Parse(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id format"})
+		return
+	}
+
+	user, err := h.authService.GetUserByID(userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
