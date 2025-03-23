@@ -33,12 +33,12 @@ func (s *ProductCategoryService) Create(category *models.ProductCategory) error 
 	return s.categoryRepo.Create(category)
 }
 
-func (s *ProductCategoryService) FindByID(id uuid.UUID) (*models.ProductCategory, error) {
-	return s.categoryRepo.FindByID(id)
+func (s *ProductCategoryService) FindByID(restaurant_id uuid.UUID, id uuid.UUID) (*models.ProductCategory, error) {
+	return s.categoryRepo.FindByID(restaurant_id, id)
 }
 
-func (s *ProductCategoryService) Update(category *models.ProductCategory) error {
-	existing, err := s.categoryRepo.FindByID(category.ID)
+func (s *ProductCategoryService) Update(restaurant_id uuid.UUID, category *models.ProductCategory) error {
+	existing, err := s.categoryRepo.FindByID(restaurant_id, category.ID)
 	if err != nil {
 		return err
 	}
@@ -58,9 +58,9 @@ func (s *ProductCategoryService) Update(category *models.ProductCategory) error 
 	return s.categoryRepo.Update(category)
 }
 
-func (s *ProductCategoryService) Delete(id uuid.UUID) error {
+func (s *ProductCategoryService) Delete(restaurant_id uuid.UUID, id uuid.UUID) error {
 	// Em vez de deletar completamente, apenas desativa a categoria
-	return s.categoryRepo.Delete(id)
+	return s.categoryRepo.Delete(restaurant_id, id)
 }
 
 func (s *ProductCategoryService) FindByRestaurant(restaurantID uuid.UUID) ([]models.ProductCategory, error) {

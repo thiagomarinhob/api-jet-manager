@@ -27,9 +27,9 @@ func (r *PostgresProductRepository) Create(product *models.Product) error {
 	return r.DB.Create(product).Error
 }
 
-func (r *PostgresProductRepository) FindByID(id uuid.UUID) (*models.Product, error) {
+func (r *PostgresProductRepository) FindByID(restaurantID, id uuid.UUID) (*models.Product, error) {
 	var product models.Product
-	if err := r.DB.First(&product, "id = ?", id).Error; err != nil {
+	if err := r.DB.Where("restaurant_id = ? AND id = ?", restaurantID, id).First(&product).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("product not found")
 		}
@@ -39,11 +39,12 @@ func (r *PostgresProductRepository) FindByID(id uuid.UUID) (*models.Product, err
 }
 
 func (r *PostgresProductRepository) Update(product *models.Product) error {
+	// Assumindo que o restaurant_id já está definido no objeto product
 	return r.DB.Save(product).Error
 }
 
-func (r *PostgresProductRepository) Delete(id uuid.UUID) error {
-	return r.DB.Delete(&models.Product{}, "id = ?", id).Error
+func (r *PostgresProductRepository) Delete(restaurantID, id uuid.UUID) error {
+	return r.DB.Where("restaurant_id = ?", restaurantID).Delete(&models.Product{}, "id = ?", id).Error
 }
 
 func (r *PostgresProductRepository) FindByRestaurant(restaurantID uuid.UUID) ([]models.Product, error) {
@@ -62,11 +63,10 @@ func (r *PostgresProductRepository) FindByCategory(restaurantID uuid.UUID, categ
 	return products, nil
 }
 
-func (r *PostgresProductRepository) UpdateStock(id uuid.UUID, inStock bool) error {
-	return r.DB.Model(&models.Product{}).Where("id = ?", id).Update("in_stock", inStock).Error
+func (r *PostgresProductRepository) UpdateStock(restaurantID, id uuid.UUID, inStock bool) error {
+	return r.DB.Model(&models.Product{}).Where("restaurant_id = ? AND id = ?", restaurantID, id).Update("in_stock", inStock).Error
 }
 
-// FindWithFilters implementa a busca paginada com filtros e ordenação
 func (r *PostgresProductRepository) FindWithFilters(
 	restaurantID uuid.UUID,
 	offset int,
@@ -127,7 +127,6 @@ func (r *PostgresProductRepository) FindWithFilters(
 	return products, totalItems, nil
 }
 
-// Função auxiliar para validar campos de ordenação
 func isValidSortField(field string) bool {
 	validFields := map[string]bool{
 		"name":       true,

@@ -21,16 +21,16 @@ func (s *ProductService) Create(product *models.Product) error {
 	return s.productRepo.Create(product)
 }
 
-func (s *ProductService) GetByID(id uuid.UUID) (*models.Product, error) {
-	return s.productRepo.FindByID(id)
+func (s *ProductService) GetByID(restaurant_id uuid.UUID, id uuid.UUID) (*models.Product, error) {
+	return s.productRepo.FindByID(restaurant_id, id)
 }
 
 func (s *ProductService) Update(product *models.Product) error {
 	return s.productRepo.Update(product)
 }
 
-func (s *ProductService) Delete(id uuid.UUID) error {
-	return s.productRepo.Delete(id)
+func (s *ProductService) Delete(restaurant_id uuid.UUID, id uuid.UUID) error {
+	return s.productRepo.Delete(restaurant_id, id)
 }
 
 func (s *ProductService) List(restaurantID uuid.UUID) ([]models.Product, error) {
@@ -41,8 +41,8 @@ func (s *ProductService) GetByCategory(restaurantID uuid.UUID, category models.P
 	return s.productRepo.FindByCategory(restaurantID, category)
 }
 
-func (s *ProductService) UpdateStock(id uuid.UUID, inStock bool) error {
-	return s.productRepo.UpdateStock(id, inStock)
+func (s *ProductService) UpdateStock(restaurant_id uuid.UUID, id uuid.UUID, inStock bool) error {
+	return s.productRepo.UpdateStock(restaurant_id, id, inStock)
 }
 
 // ListWithPagination retorna produtos paginados com opções de filtragem e ordenação

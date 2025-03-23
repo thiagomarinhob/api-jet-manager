@@ -118,7 +118,19 @@ func (h *FinanceHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	transaction, err := h.financeService.GetByID(transactionID)
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
+	if errRes != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	transaction, err := h.financeService.GetByID(restaurant_uuid, transactionID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
 		return
@@ -131,6 +143,18 @@ func (h *FinanceHandler) List(c *gin.Context) {
 	transactionType := c.Query("type")
 	startDateStr := c.Query("start_date")
 	endDateStr := c.Query("end_date")
+
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
+	if errRes != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
 
 	var transactions []models.FinancialTransaction
 	var err error
@@ -148,7 +172,7 @@ func (h *FinanceHandler) List(c *gin.Context) {
 			return
 		}
 
-		transactions, err = h.financeService.GetByType(tType)
+		transactions, err = h.financeService.GetByType(restaurant_uuid, tType)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch transactions"})
 			return
@@ -167,14 +191,14 @@ func (h *FinanceHandler) List(c *gin.Context) {
 			return
 		}
 
-		transactions, err = h.financeService.GetByDateRange(startDate, endDate)
+		transactions, err = h.financeService.GetByDateRange(restaurant_uuid, startDate, endDate)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch transactions"})
 			return
 		}
 	} else {
 		// Listar todas
-		transactions, err = h.financeService.List()
+		transactions, err = h.financeService.List(restaurant_uuid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch transactions"})
 			return
@@ -190,6 +214,18 @@ func (h *FinanceHandler) GetSummary(c *gin.Context) {
 	yearStr := c.Query("year")
 	monthStr := c.Query("month")
 
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
+	if errRes != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
 	switch period {
 	case "daily":
 		if dateStr == "" {
@@ -203,7 +239,7 @@ func (h *FinanceHandler) GetSummary(c *gin.Context) {
 			return
 		}
 
-		income, expense, err := h.financeService.GetDailySummary(date)
+		income, expense, err := h.financeService.GetDailySummary(restaurant_uuid, date)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to calculate summary"})
 			return
@@ -239,7 +275,7 @@ func (h *FinanceHandler) GetSummary(c *gin.Context) {
 			return
 		}
 
-		income, expense, err := h.financeService.GetMonthlySummary(year, month)
+		income, expense, err := h.financeService.GetMonthlySummary(restaurant_uuid, year, month)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to calculate summary"})
 			return
@@ -265,6 +301,18 @@ func (h *FinanceHandler) Update(c *gin.Context) {
 		return
 	}
 
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
+	if errRes != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
 	var req FinanceTransactionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -277,7 +325,7 @@ func (h *FinanceHandler) Update(c *gin.Context) {
 		return
 	}
 
-	transaction, err := h.financeService.GetByID(transactionID)
+	transaction, err := h.financeService.GetByID(restaurant_uuid, transactionID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "transaction not found"})
 		return
@@ -354,7 +402,19 @@ func (h *FinanceHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.financeService.Delete(transactionID); err != nil {
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
+	if errRes != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	if err := h.financeService.Delete(restaurant_uuid, transactionID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

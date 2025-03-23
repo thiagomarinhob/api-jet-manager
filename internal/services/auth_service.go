@@ -26,7 +26,7 @@ func NewAuthService(userRepo repositories.UserRepository, jwtService *auth.JWTSe
 
 func (s *AuthService) Register(user *models.User) error {
 	// Verificar se já existe um usuário com o mesmo email
-	existingUser, err := s.userRepo.FindByEmail(user.Email)
+	existingUser, err := s.userRepo.FindByEmail(*user.RestaurantID, user.Email)
 	if err == nil && existingUser != nil {
 		return errors.New("user with this email already exists")
 	}
@@ -37,7 +37,7 @@ func (s *AuthService) Register(user *models.User) error {
 
 func (s *AuthService) Login(email, password string) (string, *models.User, error) {
 	// Buscar usuário pelo email
-	user, err := s.userRepo.FindByEmail(email)
+	user, err := s.userRepo.FindByEmailGlobal(email)
 	if err != nil {
 		return "", nil, errors.New("invalid credentials")
 	}
@@ -56,29 +56,29 @@ func (s *AuthService) Login(email, password string) (string, *models.User, error
 	return token, user, nil
 }
 
-func (s *AuthService) GetUserByID(id uuid.UUID) (*models.User, error) {
-	return s.userRepo.FindByID(id)
+func (s *AuthService) FindUserByID(restaurantID uuid.UUID, id uuid.UUID) (*models.User, error) {
+	return s.userRepo.FindByID(restaurantID, id)
 }
 
-func (s *AuthService) GetUserByEmail(email string) (*models.User, error) {
-	return s.userRepo.FindByEmail(email)
+func (s *AuthService) FindUserByEmail(restaurantID uuid.UUID, email string) (*models.User, error) {
+	return s.userRepo.FindByEmail(restaurantID, email)
 }
 
 func (s *AuthService) UpdateUser(user *models.User) error {
 	return s.userRepo.Update(user)
 }
 
-func (s *AuthService) DeleteUser(id uuid.UUID) error {
-	return s.userRepo.Delete(id)
+func (s *AuthService) DeleteUser(restaurantID uuid.UUID, id uuid.UUID) error {
+	return s.userRepo.Delete(restaurantID, id)
 }
 
-func (s *AuthService) ListUsers() ([]models.User, error) {
-	return s.userRepo.List()
+func (s *AuthService) ListUsers(restaurantID uuid.UUID) ([]models.User, error) {
+	return s.userRepo.List(restaurantID)
 }
 
 // Verifica se já existe um superadmin no sistema
 func (s *AuthService) SuperAdminExists() (bool, error) {
-	users, err := s.userRepo.FindByType(models.UserTypeSuperAdmin)
+	users, err := s.userRepo.FindByTypeGlobal(models.UserTypeSuperAdmin)
 	if err != nil {
 		return false, err
 	}
@@ -91,6 +91,6 @@ func (s *AuthService) ListUsersByRestaurant(restaurantID uuid.UUID) ([]models.Us
 }
 
 // Lista usuários por tipo
-func (s *AuthService) ListUsersByType(userType models.UserType) ([]models.User, error) {
-	return s.userRepo.FindByType(userType)
+func (s *AuthService) ListUsersByType(restaurantID uuid.UUID, userType models.UserType) ([]models.User, error) {
+	return s.userRepo.FindByType(restaurantID, userType)
 }

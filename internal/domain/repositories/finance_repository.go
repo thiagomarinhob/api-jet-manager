@@ -10,13 +10,13 @@ import (
 
 type FinanceRepository interface {
 	Create(transaction *models.FinancialTransaction) error
-	FindByID(id uuid.UUID) (*models.FinancialTransaction, error)
+	FindByID(restaurantID, id uuid.UUID) (*models.FinancialTransaction, error)
 	Update(transaction *models.FinancialTransaction) error
-	Delete(id uuid.UUID) error
-	List() ([]models.FinancialTransaction, error)
-	FindByType(transactionType models.TransactionType) ([]models.FinancialTransaction, error)
-	FindByDateRange(startDate, endDate time.Time) ([]models.FinancialTransaction, error)
-	FindByOrder(orderID uuid.UUID) ([]models.FinancialTransaction, error)
-	GetDailySummary(date time.Time) (float64, float64, error) // Retorna (receitas, despesas)
-	GetMonthlySummary(year int, month int) (float64, float64, error)
+	Delete(restaurantID, id uuid.UUID) error
+	List(restaurantID uuid.UUID) ([]models.FinancialTransaction, error)
+	FindByType(restaurantID uuid.UUID, transactionType models.TransactionType) ([]models.FinancialTransaction, error)
+	FindByDateRange(restaurantID uuid.UUID, startDate, endDate time.Time) ([]models.FinancialTransaction, error)
+	FindByOrder(restaurantID, orderID uuid.UUID) ([]models.FinancialTransaction, error)
+	GetDailySummary(restaurantID uuid.UUID, date time.Time) (float64, float64, error) // Retorna (receitas, despesas)
+	GetMonthlySummary(restaurantID uuid.UUID, year int, month int) (float64, float64, error)
 }

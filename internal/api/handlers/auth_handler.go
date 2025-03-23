@@ -235,25 +235,63 @@ func (h *AuthHandler) RegisterSuperAdmin(c *gin.Context) {
 
 // GetProfile - obtém o perfil do usuário atual
 func (h *AuthHandler) GetProfile(c *gin.Context) {
-	userIDStr, exists := c.Get("user_id")
+	userIDValue, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	// Converter a string para UUID
-	userID, err := uuid.Parse(userIDStr.(string))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id format"})
+	restaurantIDValue, existsRestaurant := c.Get("restaurant_id")
+	if !existsRestaurant {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	user, err := h.authService.GetUserByID(userID)
+	// Verifica se userID é um ponteiro para UUID ou uma string
+	var userID uuid.UUID
+	switch v := userIDValue.(type) {
+	case *uuid.UUID:
+		userID = *v
+	case uuid.UUID:
+		userID = v
+	case string:
+		var err error
+		userID, err = uuid.Parse(v)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id format"})
+			return
+		}
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id type"})
+		return
+	}
+
+	// Verifica se restaurantID é um ponteiro para UUID ou uma string
+	var restaurantID uuid.UUID
+	switch v := restaurantIDValue.(type) {
+	case *uuid.UUID:
+		restaurantID = *v
+	case uuid.UUID:
+		restaurantID = v
+	case string:
+		var err error
+		restaurantID, err = uuid.Parse(v)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant id format"})
+			return
+		}
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant id type"})
+		return
+	}
+
+	user, err := h.authService.FindUserByID(restaurantID, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 
+	// O resto do código permanece o mesmo
 	response := gin.H{
 		"id":    user.ID,
 		"name":  user.Name,
@@ -281,6 +319,12 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
+	restaurantID, existsRestaurant := c.Get("requested_restaurant_id")
+	if !existsRestaurant {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
 	var req struct {
 		Name     string `json:"name"`
 		Email    string `json:"email"`
@@ -291,7 +335,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authService.GetUserByID(userID.(uuid.UUID))
+	user, err := h.authService.FindUserByID(restaurantID.(uuid.UUID), userID.(uuid.UUID))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return

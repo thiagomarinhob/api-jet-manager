@@ -121,6 +121,11 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	restaurantsApi.POST("/:restaurant_id/orders/:order_id/items", middlewares.RestaurantMiddleware(), orderHandler.AddItem)
 	restaurantsApi.DELETE("/:restaurant_id/orders/:order_id/items/:item_id", middlewares.RestaurantMiddleware(), orderHandler.RemoveItem)
 
+	restaurantsApi.GET("/:restaurant_id/delivery/today", orderHandler.FindTodayDeliveryOrders)
+	restaurantsApi.GET("/:restaurant_id/delivery/by-date", orderHandler.FindDeliveryOrdersByDate)
+	restaurantsApi.GET("/:restaurant_id/delivery/by-type-and-date", orderHandler.FindOrdersByDateAndType)
+	restaurantsApi.GET("/:restaurant_id/delivery/by-date-range", orderHandler.FindOrdersByDateRangeAndType)
+
 	// Rotas de produtos (agrupadas por restaurante)
 	restaurantsApi.GET("/:restaurant_id/products", middlewares.RestaurantMiddleware(), productHandler.List)
 	restaurantsApi.GET("/:restaurant_id/products/:product_id", middlewares.RestaurantMiddleware(), productHandler.GetByID)

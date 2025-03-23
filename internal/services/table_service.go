@@ -22,30 +22,30 @@ func (s *TableService) Create(table *models.Table) error {
 	return s.tableRepo.Create(table)
 }
 
-func (s *TableService) GetByID(id uuid.UUID) (*models.Table, error) {
-	return s.tableRepo.FindByID(id)
+func (s *TableService) GetByID(restaurant_id uuid.UUID, id uuid.UUID) (*models.Table, error) {
+	return s.tableRepo.FindByID(restaurant_id, id)
 }
 
-func (s *TableService) GetByNumber(number int) (*models.Table, error) {
-	return s.tableRepo.FindByNumber(number)
+func (s *TableService) GetByNumber(restaurant_id uuid.UUID, number int) (*models.Table, error) {
+	return s.tableRepo.FindByNumber(restaurant_id, number)
 }
 
 func (s *TableService) Update(table *models.Table) error {
 	return s.tableRepo.Update(table)
 }
 
-func (s *TableService) Delete(id uuid.UUID) error {
-	return s.tableRepo.Delete(id)
+func (s *TableService) Delete(restaurant_id uuid.UUID, id uuid.UUID) error {
+	return s.tableRepo.Delete(restaurant_id, id)
 }
 
-func (s *TableService) List() ([]models.Table, error) {
-	return s.tableRepo.List()
+func (s *TableService) List(restaurant_id uuid.UUID) ([]models.Table, error) {
+	return s.tableRepo.List(restaurant_id)
 }
 
-func (s *TableService) UpdateStatus(id uuid.UUID, status models.TableStatus) error {
-	return s.tableRepo.UpdateStatus(id, status)
+func (s *TableService) UpdateStatus(restaurant_id uuid.UUID, id uuid.UUID, status models.TableStatus) error {
+	return s.tableRepo.UpdateStatus(restaurant_id, id, status)
 }
 
-func (s *TableService) SetCurrentOrder(id uuid.UUID, orderID *uuid.UUID) error {
-	return s.tableRepo.SetCurrentOrder(id, orderID)
+func (s *TableService) SetCurrentOrder(restaurant_id uuid.UUID, id uuid.UUID, orderID *uuid.UUID) error {
+	return s.tableRepo.SetCurrentOrder(restaurant_id, id, orderID)
 }
