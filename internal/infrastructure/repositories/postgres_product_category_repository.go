@@ -23,12 +23,13 @@ func NewPostgresProductCategoryRepository(db *database.PostgresDB) *PostgresProd
 }
 
 func (r *PostgresProductCategoryRepository) Create(category *models.ProductCategory) error {
+	// O restaurant_id já deve estar definido no objeto category antes de chamar este método
 	return r.DB.Create(category).Error
 }
 
-func (r *PostgresProductCategoryRepository) FindByID(id uuid.UUID) (*models.ProductCategory, error) {
+func (r *PostgresProductCategoryRepository) FindByID(restaurantID, id uuid.UUID) (*models.ProductCategory, error) {
 	var category models.ProductCategory
-	if err := r.DB.First(&category, "id = ?", id).Error; err != nil {
+	if err := r.DB.Where("restaurant_id = ? AND id = ?", restaurantID, id).First(&category).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("category not found")
 		}
@@ -38,12 +39,12 @@ func (r *PostgresProductCategoryRepository) FindByID(id uuid.UUID) (*models.Prod
 }
 
 func (r *PostgresProductCategoryRepository) Update(category *models.ProductCategory) error {
+	// Assumindo que o restaurant_id já está definido no objeto category
 	return r.DB.Save(category).Error
 }
 
-func (r *PostgresProductCategoryRepository) Delete(id uuid.UUID) error {
-	// Soft delete - apenas marca como inativo ao invés de remover
-	return r.DB.Model(&models.ProductCategory{}).Where("id = ?", id).Update("active", false).Error
+func (r *PostgresProductCategoryRepository) Delete(restaurantID, id uuid.UUID) error {
+	return r.DB.Model(&models.ProductCategory{}).Where("restaurant_id = ? AND id = ?", restaurantID, id).Update("active", false).Error
 }
 
 func (r *PostgresProductCategoryRepository) FindByRestaurant(restaurantID uuid.UUID) ([]models.ProductCategory, error) {

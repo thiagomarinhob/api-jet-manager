@@ -26,6 +26,18 @@ func NewTableHandler(tableService *services.TableService) *TableHandler {
 }
 
 func (h *TableHandler) Create(c *gin.Context) {
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
 	var req TableRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -33,9 +45,10 @@ func (h *TableHandler) Create(c *gin.Context) {
 	}
 
 	table := &models.Table{
-		Number:   req.Number,
-		Capacity: req.Capacity,
-		Status:   models.TableStatusFree,
+		RestaurantID: restaurant_uuid,
+		Number:       req.Number,
+		Capacity:     req.Capacity,
+		Status:       models.TableStatusFree,
 	}
 
 	if err := h.tableService.Create(table); err != nil {
@@ -53,13 +66,25 @@ func (h *TableHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	uuid, err := uuid.Parse(id)
+	table_uuid, err := uuid.Parse(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
 		return
 	}
 
-	table, err := h.tableService.GetByID(uuid)
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	table, err := h.tableService.GetByID(restaurant_uuid, table_uuid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "table not found"})
 		return
@@ -69,7 +94,19 @@ func (h *TableHandler) GetByID(c *gin.Context) {
 }
 
 func (h *TableHandler) List(c *gin.Context) {
-	tables, err := h.tableService.List()
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	tables, err := h.tableService.List(restaurant_uuid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tables"})
 		return
@@ -79,6 +116,18 @@ func (h *TableHandler) List(c *gin.Context) {
 }
 
 func (h *TableHandler) Update(c *gin.Context) {
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
 	id := c.Param("table_id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
@@ -91,13 +140,13 @@ func (h *TableHandler) Update(c *gin.Context) {
 		return
 	}
 
-	uuid, err := uuid.Parse(id)
+	table_uuid, err := uuid.Parse(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
 		return
 	}
 
-	table, err := h.tableService.GetByID(uuid)
+	table, err := h.tableService.GetByID(restaurant_uuid, table_uuid)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "table not found"})
 		return
@@ -115,19 +164,31 @@ func (h *TableHandler) Update(c *gin.Context) {
 }
 
 func (h *TableHandler) Delete(c *gin.Context) {
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
 	id := c.Param("table_id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
 		return
 	}
 
-	uuid, err := uuid.Parse(id)
+	table_uuid, err := uuid.Parse(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
 		return
 	}
 
-	if err := h.tableService.Delete(uuid); err != nil {
+	if err := h.tableService.Delete(restaurant_uuid, table_uuid); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -136,6 +197,18 @@ func (h *TableHandler) Delete(c *gin.Context) {
 }
 
 func (h *TableHandler) UpdateStatus(c *gin.Context) {
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
 	id := c.Param("table_id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
@@ -163,13 +236,13 @@ func (h *TableHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	uuid, err := uuid.Parse(id)
+	table_uuid, err := uuid.Parse(id)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
 		return
 	}
 
-	if err := h.tableService.UpdateStatus(uuid, status); err != nil {
+	if err := h.tableService.UpdateStatus(restaurant_uuid, table_uuid, status); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

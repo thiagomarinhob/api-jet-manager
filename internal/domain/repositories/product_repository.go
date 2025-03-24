@@ -9,14 +9,14 @@ import (
 
 type ProductRepository interface {
 	Create(product *models.Product) error
-	FindByID(id uuid.UUID) (*models.Product, error)
+	FindByID(restaurantID, id uuid.UUID) (*models.Product, error)
 	Update(product *models.Product) error
-	Delete(id uuid.UUID) error
+	Delete(restaurantID, id uuid.UUID) error
 
 	// Métodos de listagem simples
 	FindByRestaurant(restaurantID uuid.UUID) ([]models.Product, error)
 	FindByCategory(restaurantID uuid.UUID, category models.ProductCategory) ([]models.Product, error)
-	UpdateStock(id uuid.UUID, inStock bool) error
+	UpdateStock(restaurantID, id uuid.UUID, inStock bool) error
 
 	// Método de paginação e filtragem
 	// Retorna: produtos, contagem total e erro

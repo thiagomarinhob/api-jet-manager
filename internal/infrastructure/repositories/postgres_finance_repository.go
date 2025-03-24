@@ -22,23 +22,23 @@ func NewPostgresFinanceRepository(db *database.PostgresDB) *PostgresFinanceRepos
 	}
 }
 
-func (r *PostgresFinanceRepository) FindByDateRange(startDate, endDate time.Time) ([]models.FinancialTransaction, error) {
+func (r *PostgresFinanceRepository) FindByDateRange(restaurantID uuid.UUID, startDate, endDate time.Time) ([]models.FinancialTransaction, error) {
 	var transactions []models.FinancialTransaction
-	if err := r.DB.Where("date BETWEEN ? AND ?", startDate, endDate).Find(&transactions).Error; err != nil {
+	if err := r.DB.Where("restaurant_id = ? AND date BETWEEN ? AND ?", restaurantID, startDate, endDate).Find(&transactions).Error; err != nil {
 		return nil, err
 	}
 	return transactions, nil
 }
 
-func (r *PostgresFinanceRepository) FindByOrder(orderID uuid.UUID) ([]models.FinancialTransaction, error) {
+func (r *PostgresFinanceRepository) FindByOrder(restaurantID, orderID uuid.UUID) ([]models.FinancialTransaction, error) {
 	var transactions []models.FinancialTransaction
-	if err := r.DB.Where("order_id = ?", orderID).Find(&transactions).Error; err != nil {
+	if err := r.DB.Where("restaurant_id = ? AND order_id = ?", restaurantID, orderID).Find(&transactions).Error; err != nil {
 		return nil, err
 	}
 	return transactions, nil
 }
 
-func (r *PostgresFinanceRepository) GetDailySummary(date time.Time) (float64, float64, error) {
+func (r *PostgresFinanceRepository) GetDailySummary(restaurantID uuid.UUID, date time.Time) (float64, float64, error) {
 	// Define o início e o fim do dia
 	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
 	endOfDay := startOfDay.Add(24 * time.Hour)
@@ -46,7 +46,7 @@ func (r *PostgresFinanceRepository) GetDailySummary(date time.Time) (float64, fl
 	// Calcula o total de receitas
 	var income float64
 	if err := r.DB.Model(&models.FinancialTransaction{}).
-		Where("type = ? AND date BETWEEN ? AND ?", models.TransactionTypeIncome, startOfDay, endOfDay).
+		Where("restaurant_id = ? AND type = ? AND date BETWEEN ? AND ?", restaurantID, models.TransactionTypeIncome, startOfDay, endOfDay).
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&income).Error; err != nil {
 		return 0, 0, err
@@ -55,7 +55,7 @@ func (r *PostgresFinanceRepository) GetDailySummary(date time.Time) (float64, fl
 	// Calcula o total de despesas
 	var expense float64
 	if err := r.DB.Model(&models.FinancialTransaction{}).
-		Where("type = ? AND date BETWEEN ? AND ?", models.TransactionTypeExpense, startOfDay, endOfDay).
+		Where("restaurant_id = ? AND type = ? AND date BETWEEN ? AND ?", restaurantID, models.TransactionTypeExpense, startOfDay, endOfDay).
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&expense).Error; err != nil {
 		return 0, 0, err
@@ -64,7 +64,7 @@ func (r *PostgresFinanceRepository) GetDailySummary(date time.Time) (float64, fl
 	return income, expense, nil
 }
 
-func (r *PostgresFinanceRepository) GetMonthlySummary(year int, month int) (float64, float64, error) {
+func (r *PostgresFinanceRepository) GetMonthlySummary(restaurantID uuid.UUID, year int, month int) (float64, float64, error) {
 	// Define o início e o fim do mês
 	loc := time.Now().Location()
 	startOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, loc)
@@ -79,7 +79,7 @@ func (r *PostgresFinanceRepository) GetMonthlySummary(year int, month int) (floa
 	// Calcula o total de receitas
 	var income float64
 	if err := r.DB.Model(&models.FinancialTransaction{}).
-		Where("type = ? AND date BETWEEN ? AND ?", models.TransactionTypeIncome, startOfMonth, endOfMonth).
+		Where("restaurant_id = ? AND type = ? AND date BETWEEN ? AND ?", restaurantID, models.TransactionTypeIncome, startOfMonth, endOfMonth).
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&income).Error; err != nil {
 		return 0, 0, err
@@ -88,7 +88,7 @@ func (r *PostgresFinanceRepository) GetMonthlySummary(year int, month int) (floa
 	// Calcula o total de despesas
 	var expense float64
 	if err := r.DB.Model(&models.FinancialTransaction{}).
-		Where("type = ? AND date BETWEEN ? AND ?", models.TransactionTypeExpense, startOfMonth, endOfMonth).
+		Where("restaurant_id = ? AND type = ? AND date BETWEEN ? AND ?", restaurantID, models.TransactionTypeExpense, startOfMonth, endOfMonth).
 		Select("COALESCE(SUM(amount), 0)").
 		Scan(&expense).Error; err != nil {
 		return 0, 0, err
@@ -101,9 +101,9 @@ func (r *PostgresFinanceRepository) Create(transaction *models.FinancialTransact
 	return r.DB.Create(transaction).Error
 }
 
-func (r *PostgresFinanceRepository) FindByID(id uuid.UUID) (*models.FinancialTransaction, error) {
+func (r *PostgresFinanceRepository) FindByID(restaurantID, id uuid.UUID) (*models.FinancialTransaction, error) {
 	var transaction models.FinancialTransaction
-	if err := r.DB.Where("id = ?", id).First(&transaction).Error; err != nil {
+	if err := r.DB.Where("restaurant_id = ? AND id = ?", restaurantID, id).First(&transaction).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("transaction not found")
 		}
@@ -116,21 +116,21 @@ func (r *PostgresFinanceRepository) Update(transaction *models.FinancialTransact
 	return r.DB.Save(transaction).Error
 }
 
-func (r *PostgresFinanceRepository) Delete(id uuid.UUID) error {
-	return r.DB.Delete(&models.FinancialTransaction{}, id).Error
+func (r *PostgresFinanceRepository) Delete(restaurantID, id uuid.UUID) error {
+	return r.DB.Where("restaurant_id = ?", restaurantID).Delete(&models.FinancialTransaction{}, id).Error
 }
 
-func (r *PostgresFinanceRepository) List() ([]models.FinancialTransaction, error) {
+func (r *PostgresFinanceRepository) List(restaurantID uuid.UUID) ([]models.FinancialTransaction, error) {
 	var transactions []models.FinancialTransaction
-	if err := r.DB.Find(&transactions).Error; err != nil {
+	if err := r.DB.Where("restaurant_id = ?", restaurantID).Find(&transactions).Error; err != nil {
 		return nil, err
 	}
 	return transactions, nil
 }
 
-func (r *PostgresFinanceRepository) FindByType(transactionType models.TransactionType) ([]models.FinancialTransaction, error) {
+func (r *PostgresFinanceRepository) FindByType(restaurantID uuid.UUID, transactionType models.TransactionType) ([]models.FinancialTransaction, error) {
 	var transactions []models.FinancialTransaction
-	if err := r.DB.Where("type = ?", transactionType).Find(&transactions).Error; err != nil {
+	if err := r.DB.Where("restaurant_id = ? AND type = ?", restaurantID, transactionType).Find(&transactions).Error; err != nil {
 		return nil, err
 	}
 	return transactions, nil

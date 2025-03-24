@@ -52,14 +52,14 @@ func (s *OrderService) CreateOrder(order *models.Order, orderItems []models.Orde
 	return nil
 }
 
-func (s *OrderService) GetByID(id uuid.UUID) (*models.Order, error) {
-	order, err := s.orderRepo.FindByID(id)
+func (s *OrderService) GetByID(restaurant_id uuid.UUID, id uuid.UUID) (*models.Order, error) {
+	order, err := s.orderRepo.FindByID(restaurant_id, id)
 	if err != nil {
 		return nil, err
 	}
 
 	// Carregar os itens do pedido
-	items, err := s.orderRepo.FindItems(id)
+	items, err := s.orderRepo.FindItems(restaurant_id, id)
 	if err != nil {
 		return nil, err
 	}
@@ -68,29 +68,29 @@ func (s *OrderService) GetByID(id uuid.UUID) (*models.Order, error) {
 	return order, nil
 }
 
-func (s *OrderService) GetByTable(tableID uuid.UUID) ([]models.Order, error) {
-	return s.orderRepo.FindByTable(tableID)
+func (s *OrderService) GetByTable(restaurant_id uuid.UUID, tableID uuid.UUID) ([]models.Order, error) {
+	return s.orderRepo.FindByTable(restaurant_id, tableID)
 }
 
-func (s *OrderService) GetActiveByTable(tableID uuid.UUID) (*models.Order, error) {
-	return s.orderRepo.FindActiveByTable(tableID)
+func (s *OrderService) GetActiveByTable(restaurant_id uuid.UUID, tableID uuid.UUID) (*models.Order, error) {
+	return s.orderRepo.FindActiveByTable(restaurant_id, tableID)
 }
 
-func (s *OrderService) GetByStatus(status models.OrderStatus) ([]models.Order, error) {
-	return s.orderRepo.FindByStatus(status)
+func (s *OrderService) GetByStatus(restaurant_id uuid.UUID, status models.OrderStatus) ([]models.Order, error) {
+	return s.orderRepo.FindByStatus(restaurant_id, status)
 }
 
-func (s *OrderService) List() ([]models.Order, error) {
-	return s.orderRepo.List()
+func (s *OrderService) List(restaurant_id uuid.UUID) ([]models.Order, error) {
+	return s.orderRepo.List(restaurant_id)
 }
 
-func (s *OrderService) UpdateStatus(id uuid.UUID, status models.OrderStatus) error {
-	return s.orderRepo.UpdateStatus(id, status)
+func (s *OrderService) UpdateStatus(restaurant_id uuid.UUID, id uuid.UUID, status models.OrderStatus) error {
+	return s.orderRepo.UpdateStatus(restaurant_id, id, status)
 }
 
-func (s *OrderService) AddItem(item *models.OrderItem) error {
+func (s *OrderService) AddItem(restaurant_id uuid.UUID, item *models.OrderItem) error {
 	// Verificar se o produto existe
-	product, err := s.GetProductByID(item.ProductID)
+	product, err := s.GetProductByID(restaurant_id, item.ProductID)
 	if err != nil {
 		return err
 	}
@@ -104,7 +104,7 @@ func (s *OrderService) AddItem(item *models.OrderItem) error {
 	}
 
 	// Atualizar o valor total do pedido
-	order, err := s.orderRepo.FindByID(item.OrderID)
+	order, err := s.orderRepo.FindByID(restaurant_id, item.OrderID)
 	if err != nil {
 		return err
 	}
@@ -113,9 +113,9 @@ func (s *OrderService) AddItem(item *models.OrderItem) error {
 	return s.orderRepo.Update(order)
 }
 
-func (s *OrderService) RemoveItem(orderID, itemID uuid.UUID) error {
+func (s *OrderService) RemoveItem(restaurant_id uuid.UUID, orderID, itemID uuid.UUID) error {
 	// Encontrar o item
-	items, err := s.orderRepo.FindItems(orderID)
+	items, err := s.orderRepo.FindItems(restaurant_id, orderID)
 	if err != nil {
 		return err
 	}
@@ -133,12 +133,12 @@ func (s *OrderService) RemoveItem(orderID, itemID uuid.UUID) error {
 	}
 
 	// Remover o item
-	if err := s.orderRepo.RemoveItem(orderID, itemID); err != nil {
+	if err := s.orderRepo.RemoveItem(restaurant_id, orderID, itemID); err != nil {
 		return err
 	}
 
 	// Atualizar o valor total do pedido
-	order, err := s.orderRepo.FindByID(orderID)
+	order, err := s.orderRepo.FindByID(restaurant_id, orderID)
 	if err != nil {
 		return err
 	}
@@ -147,8 +147,8 @@ func (s *OrderService) RemoveItem(orderID, itemID uuid.UUID) error {
 	return s.orderRepo.Update(order)
 }
 
-func (s *OrderService) GetProductByID(id uuid.UUID) (*models.Product, error) {
-	return s.productRepo.FindByID(id)
+func (s *OrderService) GetProductByID(restaurant_id uuid.UUID, id uuid.UUID) (*models.Product, error) {
+	return s.productRepo.FindByID(restaurant_id, id)
 }
 
 func (s *OrderService) RegisterPayment(order *models.Order, userID uuid.UUID) error {
@@ -165,3 +165,33 @@ func (s *OrderService) RegisterPayment(order *models.Order, userID uuid.UUID) er
 
 	return s.financeRepo.Create(transaction)
 }
+
+// FindDeliveryOrdersByDate retorna todos os pedidos de delivery para uma data específica
+func (s *OrderService) FindDeliveryOrdersByDate(restaurantID uuid.UUID, date time.Time) ([]models.Order, error) {
+	return s.orderRepo.FindDeliveryOrdersByDate(restaurantID, date)
+}
+
+// FindOrdersByDateAndType retorna todos os pedidos de um tipo específico para uma data
+func (s *OrderService) FindOrdersByDateAndType(restaurantID uuid.UUID, date time.Time, orderType models.OrderType) ([]models.Order, error) {
+	return s.orderRepo.FindOrdersByDateAndType(restaurantID, date, orderType)
+}
+
+// FindOrdersByDateRangeAndType retorna pedidos de um tipo específico dentro de um intervalo de datas
+func (s *OrderService) FindOrdersByDateRangeAndType(restaurantID uuid.UUID, startDate, endDate time.Time, orderType models.OrderType) ([]models.Order, error) {
+	return s.orderRepo.FindOrdersByDateRangeAndType(restaurantID, startDate, endDate, orderType)
+}
+
+// FindTodayDeliveryOrders retorna todos os pedidos de delivery para o dia atual
+func (s *OrderService) FindTodayDeliveryOrders(restaurantID uuid.UUID) ([]models.Order, error) {
+	today := time.Now()
+	return s.orderRepo.FindDeliveryOrdersByDate(restaurantID, today)
+}
+
+// CountDeliveryOrdersByDate conta o número de pedidos de delivery em uma data específica
+// func (s *OrderService) CountDeliveryOrdersByDate(restaurantID uuid.UUID, date time.Time) (int64, error) {
+// 	orders, err := s.orderRepo.FindDeliveryOrdersByDate(restaurantID, date)
+// 	if err != nil {
+// 		return 0, err
+// 	}
+// 	return int64(len(orders)), nil
+// }

@@ -8,9 +8,9 @@ import (
 
 type ProductCategoryRepository interface {
 	Create(category *models.ProductCategory) error
-	FindByID(id uuid.UUID) (*models.ProductCategory, error)
+	FindByID(restaurantID, id uuid.UUID) (*models.ProductCategory, error)
 	Update(category *models.ProductCategory) error
-	Delete(id uuid.UUID) error
+	Delete(restaurantID, id uuid.UUID) error
 
 	// Métodos de listagem
 	FindByRestaurant(restaurantID uuid.UUID) ([]models.ProductCategory, error)

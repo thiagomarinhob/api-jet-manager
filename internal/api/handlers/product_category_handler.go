@@ -97,7 +97,19 @@ func (h *ProductCategoryHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	category, err := h.categoryService.FindByID(catUUID)
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	category, err := h.categoryService.FindByID(restaurant_uuid, catUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
 		return
@@ -246,8 +258,20 @@ func (h *ProductCategoryHandler) Update(c *gin.Context) {
 		return
 	}
 
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
 	// Recupera a categoria existente
-	category, err := h.categoryService.FindByID(catUUID)
+	category, err := h.categoryService.FindByID(restaurant_uuid, catUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
 		return
@@ -267,7 +291,7 @@ func (h *ProductCategoryHandler) Update(c *gin.Context) {
 	category.Description = req.Description
 	category.Active = req.Active
 
-	if err := h.categoryService.Update(category); err != nil {
+	if err := h.categoryService.Update(restaurant_uuid, category); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -291,11 +315,23 @@ func (h *ProductCategoryHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
 	// Verifica se existem produtos associados a esta categoria
 	// Isso deveria ser verificado em um serviço ou repository dedicado
 	// Por ora, vamos supor que o serviço já trata isso internamente
 
-	if err := h.categoryService.Delete(catUUID); err != nil {
+	if err := h.categoryService.Delete(restaurant_uuid, catUUID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -327,8 +363,20 @@ func (h *ProductCategoryHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
+	restaurant_id := c.Param("restaurant_id")
+	if restaurant_id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
+	restaurant_uuid, err := uuid.Parse(restaurant_id)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		return
+	}
+
 	// Recupera a categoria existente
-	category, err := h.categoryService.FindByID(catUUID)
+	category, err := h.categoryService.FindByID(restaurant_uuid, catUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "category not found"})
 		return
@@ -337,7 +385,7 @@ func (h *ProductCategoryHandler) UpdateStatus(c *gin.Context) {
 	// Atualiza apenas o campo active
 	category.Active = req.Active
 
-	if err := h.categoryService.Update(category); err != nil {
+	if err := h.categoryService.Update(restaurant_uuid, category); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
