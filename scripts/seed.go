@@ -473,8 +473,8 @@ func createRestaurants(db *gorm.DB) {
 		tables := createTables(db, restaurant.ID)
 		fmt.Println("Tables == ", tables)
 		// Cria pedidos
-		// orders := createOrders(db, restaurant.ID, users, tables, products)
-		// fmt.Println(orders)
+		orders := createOrders(db, restaurant.ID, users, tables, products)
+		fmt.Println(orders)
 
 		// Cria transações financeiras
 		// createFinancialTransactions(db, restaurant.ID, users, orders)
@@ -675,8 +675,8 @@ func createOrders(db *gorm.DB, restaurantID uuid.UUID, users []User, tables []Ta
 	var orders []Order
 
 	// Cria entre 20 e 50 pedidos
-	numOrders := rand.Intn(31) + 20
-
+	// numOrders := rand.Intn(31) + 20
+	var numOrders = 5
 	// Variedade de datas para pedidos (nos últimos 90 dias)
 	now := time.Now()
 
@@ -766,7 +766,7 @@ func createOrders(db *gorm.DB, restaurantID uuid.UUID, users []User, tables []Ta
 			Status:          orderStatus,
 			Notes:           orderNotes[rand.Intn(len(orderNotes))],
 			DeliveryAddress: deliveryAddress,
-			CreatedAt:       orderDate,
+			CreatedAt:       time.Now(),
 			UpdatedAt:       orderDate,
 			PaidAt:          paidAt,
 			DeliveredAt:     deliveredAt,

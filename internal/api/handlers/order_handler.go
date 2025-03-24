@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"api-jet-manager/internal/domain/models"
@@ -10,6 +12,45 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+// ProductCodeGenerator gerencia a geração de códigos de produto
+type ProductCodeGenerator struct {
+	mutex       sync.Mutex
+	lastOrderID int
+	lastDay     int
+}
+
+// NewProductCodeGenerator cria uma nova instância do gerador
+func NewProductCodeGenerator() *ProductCodeGenerator {
+	now := time.Now()
+	return &ProductCodeGenerator{
+		lastOrderID: 0,
+		lastDay:     now.Day(),
+	}
+}
+
+// GenerateCode gera um novo código de produto no formato #DDNNN
+func (g *ProductCodeGenerator) GenerateCode() string {
+	g.mutex.Lock()
+	defer g.mutex.Unlock()
+
+	now := time.Now()
+	currentDay := now.Day()
+
+	// Se mudou o dia, reinicia o contador
+	if currentDay != g.lastDay {
+		g.lastOrderID = 0
+		g.lastDay = currentDay
+	}
+
+	// Incrementa o contador de pedidos
+	g.lastOrderID++
+
+	// Formata o código: #DDNNN
+	code := fmt.Sprintf("#%02d%03d", currentDay, g.lastOrderID)
+
+	return code
+}
 
 type OrderItemRequest struct {
 	ProductID uuid.UUID `json:"product_id" binding:"required"`
@@ -24,14 +65,16 @@ type OrderRequest struct {
 }
 
 type OrderHandler struct {
-	orderService *services.OrderService
-	tableService *services.TableService
+	orderService  *services.OrderService
+	tableService  *services.TableService
+	codeGenerator *ProductCodeGenerator
 }
 
 func NewOrderHandler(orderService *services.OrderService, tableService *services.TableService) *OrderHandler {
 	return &OrderHandler{
-		orderService: orderService,
-		tableService: tableService,
+		orderService:  orderService,
+		tableService:  tableService,
+		codeGenerator: NewProductCodeGenerator(),
 	}
 }
 
@@ -67,11 +110,15 @@ func (h *OrderHandler) Create(c *gin.Context) {
 		}
 	}
 
+	// Gerar código do pedido
+	orderCode := h.codeGenerator.GenerateCode()
+
 	order := &models.Order{
 		TableID: req.TableID,
 		UserID:  userID.(uuid.UUID),
 		Status:  models.OrderStatusPending,
 		Notes:   req.Notes,
+		Code:    orderCode,
 	}
 
 	// Processar itens do pedido

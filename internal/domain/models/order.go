@@ -34,6 +34,7 @@ type Order struct {
 	Table           *Table      `json:"table,omitempty" gorm:"foreignKey:TableID"`
 	UserID          uuid.UUID   `json:"user_id" gorm:"type:uuid;not null"`
 	User            *User       `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Code            string      `gorm:"size:20" json:"code"`
 	CustomerName    string      `gorm:"size:100" json:"customer_name"`
 	CustomerPhone   string      `gorm:"size:20" json:"customer_phone"`
 	CustomerEmail   string      `gorm:"size:100" json:"customer_email"`
