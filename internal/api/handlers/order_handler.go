@@ -211,13 +211,13 @@ func (h *OrderHandler) List(c *gin.Context) {
 
 	restaurant_id := c.Param("restaurant_id")
 	if restaurant_id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID"})
 		return
 	}
 
 	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
 	if errRes != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant UUID"})
 		return
 	}
 
@@ -225,7 +225,7 @@ func (h *OrderHandler) List(c *gin.Context) {
 	var err error
 
 	// Filtrar por mesa
-	if tableID == "" {
+	if tableID != "" {
 		tableUUID, err := uuid.Parse(tableID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
@@ -619,13 +619,13 @@ func (h *OrderHandler) FindOrdersByDateAndType(c *gin.Context) {
 func (h *OrderHandler) FindTodayDeliveryOrders(c *gin.Context) {
 	restaurant_id := c.Param("restaurant_id")
 	if restaurant_id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID"})
 		return
 	}
 
 	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
 	if errRes != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant UUID"})
 		return
 	}
 
