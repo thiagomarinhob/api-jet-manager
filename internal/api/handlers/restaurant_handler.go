@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"api-jet-manager/internal/domain/models"
@@ -23,10 +24,10 @@ type RestaurantRequest struct {
 
 type RestaurantHandler struct {
 	restaurantService *services.RestaurantService
-	userService       *services.AuthService
+	userService       *services.UserService
 }
 
-func NewRestaurantHandler(restaurantService *services.RestaurantService, userService *services.AuthService) *RestaurantHandler {
+func NewRestaurantHandler(restaurantService *services.RestaurantService, userService *services.UserService) *RestaurantHandler {
 	return &RestaurantHandler{
 		restaurantService: restaurantService,
 		userService:       userService,
@@ -78,6 +79,8 @@ func (h *RestaurantHandler) Create(c *gin.Context) {
 
 // GetByID - superadmins podem ver qualquer restaurante, outros apenas o seu
 func (h *RestaurantHandler) GetByID(c *gin.Context) {
+	verifyRestaurant, _ := c.Get("restaurant_id")
+	fmt.Println(verifyRestaurant)
 	id := c.Param("restaurant_id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID"})
