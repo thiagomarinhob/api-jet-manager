@@ -1,4 +1,3 @@
-// internal/services/auth_service.go
 package services
 
 import (
@@ -12,19 +11,19 @@ import (
 	"github.com/google/uuid"
 )
 
-type AuthService struct {
+type UserService struct {
 	userRepo   repositories.UserRepository
 	jwtService *auth.JWTService
 }
 
-func NewAuthService(userRepo repositories.UserRepository, jwtService *auth.JWTService) *AuthService {
-	return &AuthService{
+func NewUserService(userRepo repositories.UserRepository, jwtService *auth.JWTService) *UserService {
+	return &UserService{
 		userRepo:   userRepo,
 		jwtService: jwtService,
 	}
 }
 
-func (s *AuthService) Register(user *models.User) error {
+func (s *UserService) Register(user *models.User) error {
 	// Verificar se já existe um usuário com o mesmo email
 	existingUser, err := s.userRepo.FindByEmail(*user.RestaurantID, user.Email)
 	if err == nil && existingUser != nil {
@@ -35,7 +34,7 @@ func (s *AuthService) Register(user *models.User) error {
 	return s.userRepo.Create(user)
 }
 
-func (s *AuthService) Login(email, password string) (string, *models.User, error) {
+func (s *UserService) Login(email, password string) (string, *models.User, error) {
 	// Buscar usuário pelo email
 	user, err := s.userRepo.FindByEmailGlobal(email)
 	if err != nil {
@@ -56,28 +55,28 @@ func (s *AuthService) Login(email, password string) (string, *models.User, error
 	return token, user, nil
 }
 
-func (s *AuthService) FindUserByID(restaurantID uuid.UUID, id uuid.UUID) (*models.User, error) {
+func (s *UserService) FindUserByID(restaurantID uuid.UUID, id uuid.UUID) (*models.User, error) {
 	return s.userRepo.FindByID(restaurantID, id)
 }
 
-func (s *AuthService) FindUserByEmail(restaurantID uuid.UUID, email string) (*models.User, error) {
+func (s *UserService) FindUserByEmail(restaurantID uuid.UUID, email string) (*models.User, error) {
 	return s.userRepo.FindByEmail(restaurantID, email)
 }
 
-func (s *AuthService) UpdateUser(user *models.User) error {
+func (s *UserService) UpdateUser(user *models.User) error {
 	return s.userRepo.Update(user)
 }
 
-func (s *AuthService) DeleteUser(restaurantID uuid.UUID, id uuid.UUID) error {
+func (s *UserService) DeleteUser(restaurantID uuid.UUID, id uuid.UUID) error {
 	return s.userRepo.Delete(restaurantID, id)
 }
 
-func (s *AuthService) ListUsers(restaurantID uuid.UUID) ([]models.User, error) {
+func (s *UserService) ListUsers(restaurantID uuid.UUID) ([]models.User, error) {
 	return s.userRepo.List(restaurantID)
 }
 
 // Verifica se já existe um superadmin no sistema
-func (s *AuthService) SuperAdminExists() (bool, error) {
+func (s *UserService) SuperAdminExists() (bool, error) {
 	users, err := s.userRepo.FindByTypeGlobal(models.UserTypeSuperAdmin)
 	if err != nil {
 		return false, err
@@ -86,11 +85,11 @@ func (s *AuthService) SuperAdminExists() (bool, error) {
 }
 
 // Lista usuários por restaurante
-func (s *AuthService) ListUsersByRestaurant(restaurantID uuid.UUID) ([]models.User, error) {
+func (s *UserService) ListUsersByRestaurant(restaurantID uuid.UUID) ([]models.User, error) {
 	return s.userRepo.FindByRestaurant(restaurantID)
 }
 
 // Lista usuários por tipo
-func (s *AuthService) ListUsersByType(restaurantID uuid.UUID, userType models.UserType) ([]models.User, error) {
+func (s *UserService) ListUsersByType(restaurantID uuid.UUID, userType models.UserType) ([]models.User, error) {
 	return s.userRepo.FindByType(restaurantID, userType)
 }

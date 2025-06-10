@@ -1,4 +1,3 @@
-// internal/api/handlers/auth_handler.go
 package handlers
 
 import (
@@ -25,26 +24,26 @@ type RegisterRequest struct {
 	RestaurantID *uuid.UUID `json:"restaurant_id"`
 }
 
-type AuthHandler struct {
-	authService       *services.AuthService
+type UserHandler struct {
+	userService       *services.UserService
 	restaurantService *services.RestaurantService
 }
 
-func NewAuthHandler(authService *services.AuthService, restaurantService *services.RestaurantService) *AuthHandler {
-	return &AuthHandler{
-		authService:       authService,
+func NewUserHandler(userService *services.UserService, restaurantService *services.RestaurantService) *UserHandler {
+	return &UserHandler{
+		userService:       userService,
 		restaurantService: restaurantService,
 	}
 }
 
-func (h *AuthHandler) Login(c *gin.Context) {
+func (h *UserHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	token, user, err := h.authService.Login(req.Email, req.Password)
+	token, user, err := h.userService.Login(req.Email, req.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
@@ -87,7 +86,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (h *AuthHandler) Register(c *gin.Context) {
+func (h *UserHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -178,7 +177,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		RestaurantID: restaurantID,
 	}
 
-	if err := h.authService.Register(user); err != nil {
+	if err := h.userService.Register(user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -193,9 +192,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 // RegisterSuperAdmin - cria o primeiro usuário superadmin
-func (h *AuthHandler) RegisterSuperAdmin(c *gin.Context) {
+func (h *UserHandler) RegisterSuperAdmin(c *gin.Context) {
 	// Verificar se já existe um superadmin
-	exists, err := h.authService.SuperAdminExists()
+	exists, err := h.userService.SuperAdminExists()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to check superadmin existence"})
 		return
@@ -220,7 +219,7 @@ func (h *AuthHandler) RegisterSuperAdmin(c *gin.Context) {
 		RestaurantID: nil,
 	}
 
-	if err := h.authService.Register(user); err != nil {
+	if err := h.userService.Register(user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -234,7 +233,7 @@ func (h *AuthHandler) RegisterSuperAdmin(c *gin.Context) {
 }
 
 // GetProfile - obtém o perfil do usuário atual
-func (h *AuthHandler) GetProfile(c *gin.Context) {
+func (h *UserHandler) GetProfile(c *gin.Context) {
 	userIDValue, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -285,7 +284,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authService.FindUserByID(restaurantID, userID)
+	user, err := h.userService.FindUserByID(restaurantID, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
@@ -312,7 +311,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 }
 
 // UpdateProfile - atualiza o perfil do usuário atual
-func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
@@ -335,7 +334,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authService.FindUserByID(restaurantID.(uuid.UUID), userID.(uuid.UUID))
+	user, err := h.userService.FindUserByID(restaurantID.(uuid.UUID), userID.(uuid.UUID))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
@@ -351,7 +350,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 		user.Password = req.Password
 	}
 
-	if err := h.authService.UpdateUser(user); err != nil {
+	if err := h.userService.UpdateUser(user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

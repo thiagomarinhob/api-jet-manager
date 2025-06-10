@@ -26,17 +26,14 @@ func NewTableHandler(tableService *services.TableService) *TableHandler {
 }
 
 func (h *TableHandler) Create(c *gin.Context) {
-	restaurant_id := c.Param("restaurant_id")
-	if restaurant_id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+	restaurantIDRaw, _ := c.Get("restaurant_id")
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID is nil"})
 		return
 	}
 
-	restaurant_uuid, err := uuid.Parse(restaurant_id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
-		return
-	}
+	restaurantId := *restaurantIDPtr
 
 	var req TableRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -45,7 +42,7 @@ func (h *TableHandler) Create(c *gin.Context) {
 	}
 
 	table := &models.Table{
-		RestaurantID: restaurant_uuid,
+		RestaurantID: restaurantId,
 		Number:       req.Number,
 		Capacity:     req.Capacity,
 		Status:       models.TableStatusFree,
@@ -94,19 +91,16 @@ func (h *TableHandler) GetByID(c *gin.Context) {
 }
 
 func (h *TableHandler) List(c *gin.Context) {
-	restaurant_id := c.Param("restaurant_id")
-	if restaurant_id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+	restaurantIDRaw, _ := c.Get("restaurant_id")
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID is nil"})
 		return
 	}
 
-	restaurant_uuid, err := uuid.Parse(restaurant_id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
-		return
-	}
+	restaurantId := *restaurantIDPtr
 
-	tables, err := h.tableService.List(restaurant_uuid)
+	tables, err := h.tableService.List(restaurantId)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tables"})
 		return

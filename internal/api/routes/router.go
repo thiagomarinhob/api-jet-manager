@@ -25,6 +25,12 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	// Inicialização do serviço JWT
 	jwtService := auth.NewJWTService(cfg.JWTSecret, cfg.JWTExpiration)
 
+	// Inicializa o WebSocketManager
+	wsManager := handlers.NewWebSocketManager()
+	go wsManager.Run()
+
+	router.GET("ws/devileries", wsManager.ServeWebSocket)
+
 	// Repositórios
 	userRepo := repoImpl.NewPostgresUserRepository(db)
 	tableRepo := repoImpl.NewPostgresTableRepository(db)
@@ -35,7 +41,7 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	restaurantRepo := repoImpl.NewPostgresRestaurantRepository(db)
 
 	// Serviços
-	authService := services.NewAuthService(userRepo, jwtService)
+	userService := services.NewUserService(userRepo, jwtService)
 	tableService := services.NewTableService(tableRepo)
 	orderService := services.NewOrderService(orderRepo, tableRepo, financeRepo, productRepo)
 	financeService := services.NewFinanceService(financeRepo)
@@ -44,26 +50,26 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	restaurantService := services.NewRestaurantService(restaurantRepo)
 
 	// Handlers
-	authHandler := handlers.NewAuthHandler(authService, restaurantService)
+	userHandler := handlers.NewUserHandler(userService, restaurantService)
 	tableHandler := handlers.NewTableHandler(tableService)
-	orderHandler := handlers.NewOrderHandler(orderService, tableService)
+	orderHandler := handlers.NewOrderHandler(orderService, tableService, wsManager)
 	financeHandler := handlers.NewFinanceHandler(financeService)
 	productHandler := handlers.NewProductHandler(productService, productCategoryService)
 	productCategoryHandler := handlers.NewProductCategoryHandler(productCategoryService)
-	restaurantHandler := handlers.NewRestaurantHandler(restaurantService, authService)
+	restaurantHandler := handlers.NewRestaurantHandler(restaurantService, userService)
 
 	// Rotas públicas
-	router.POST("/v1/auth/login", authHandler.Login)
-	router.POST("/v1/auth/register-superadmin", authHandler.RegisterSuperAdmin) // Rota para o primeiro superadmin
-	router.POST("/v1/auth/register-admin", authHandler.Register)
+	router.POST("/v1/auth/login", userHandler.Login)
+	router.POST("/v1/auth/register-superadmin", userHandler.RegisterSuperAdmin) // Rota para o primeiro superadmin
+	router.POST("/v1/auth/register-admin", userHandler.Register)
 
 	// Grupo de rotas autenticadas
 	api := router.Group("/v1")
 	api.Use(middlewares.AuthMiddleware(jwtService))
 
 	// Rotas de perfil de usuário
-	api.GET("/profile", authHandler.GetProfile)
-	api.PUT("/profile", authHandler.UpdateProfile)
+	api.GET("/profile", userHandler.GetProfile)
+	api.PUT("/profile", userHandler.UpdateProfile)
 
 	// Rotas de gestão de restaurantes
 	restaurantsApi := api.Group("/restaurants")
@@ -76,78 +82,79 @@ func SetupRouter(cfg *config.Config, db *database.PostgresDB) *gin.Engine {
 	restaurantAdminApi := restaurantsApi.Group("/")
 	restaurantAdminApi.Use(middlewares.SuperAdminMiddleware())
 	restaurantAdminApi.POST("", restaurantHandler.Create)
-	restaurantAdminApi.PUT("/:restaurant_id", restaurantHandler.Update)
-	restaurantAdminApi.DELETE("/:restaurant_id", restaurantHandler.Delete)
-	restaurantAdminApi.PATCH("/:restaurant_id/status", restaurantHandler.UpdateStatus)
+	// restaurantAdminApi.PUT("", restaurantHandler.Update)
+	// restaurantAdminApi.DELETE("", restaurantHandler.Delete)
+	// restaurantAdminApi.PATCH("/status", restaurantHandler.UpdateStatus)
 
 	// Rotas de usuário (agrupadas por restaurante)
-	restaurantsApi.POST("/:restaurant_id/users", middlewares.RestaurantMiddleware(),
+	restaurantsApi.POST("/users", middlewares.RestaurantMiddleware(),
 		middlewares.UserTypeMiddleware(models.UserTypeAdmin, models.UserTypeManager),
-		authHandler.Register)
+		userHandler.Register)
 
 	// Rotas de categorias (agrupadas por restaurante)
-	restaurantsApi.POST("/:restaurant_id/categories", middlewares.RestaurantMiddleware(), productCategoryHandler.Create)
-	restaurantsApi.GET("/:restaurant_id/categories", middlewares.RestaurantMiddleware(), productCategoryHandler.List)
-	restaurantsApi.GET("/:restaurant_id/categories/active", middlewares.RestaurantMiddleware(), productCategoryHandler.ListActive)
-	restaurantsApi.GET("/:restaurant_id/categories/:category_id", middlewares.RestaurantMiddleware(), productCategoryHandler.GetByID)
-	restaurantsApi.PUT("/:restaurant_id/categories/:category_id", middlewares.RestaurantMiddleware(), productCategoryHandler.Update)
-	restaurantsApi.DELETE("/:restaurant_id/categories/:category_id", middlewares.RestaurantMiddleware(), productCategoryHandler.Delete)
-	restaurantsApi.PATCH("/:restaurant_id/categories/:category_id/status", middlewares.RestaurantMiddleware(), productCategoryHandler.UpdateStatus)
+	restaurantsApi.POST("/categories", middlewares.RestaurantMiddleware(), productCategoryHandler.Create)
+	restaurantsApi.GET("/categories", middlewares.RestaurantMiddleware(), productCategoryHandler.List)
+	restaurantsApi.GET("/categories/active", middlewares.RestaurantMiddleware(), productCategoryHandler.ListActive)
+	restaurantsApi.GET("/categories/:category_id", middlewares.RestaurantMiddleware(), productCategoryHandler.GetByID)
+	restaurantsApi.PUT("/categories/:category_id", middlewares.RestaurantMiddleware(), productCategoryHandler.Update)
+	restaurantsApi.DELETE("/categories/:category_id", middlewares.RestaurantMiddleware(), productCategoryHandler.Delete)
+	restaurantsApi.PATCH("/categories/:category_id/status", middlewares.RestaurantMiddleware(), productCategoryHandler.UpdateStatus)
 
 	// Rotas de mesas (agrupadas por restaurante)
-	restaurantsApi.GET("/:restaurant_id/tables", middlewares.RestaurantMiddleware(), tableHandler.List)
-	restaurantsApi.GET("/:restaurant_id/tables/:table_id", middlewares.RestaurantMiddleware(), tableHandler.GetByID)
-	restaurantsApi.POST("/:restaurant_id/tables",
+	restaurantsApi.GET("/tables", middlewares.RestaurantMiddleware(), tableHandler.List)
+	restaurantsApi.GET("/tables/:table_id", middlewares.RestaurantMiddleware(), tableHandler.GetByID)
+	restaurantsApi.POST("/tables",
 		middlewares.RestaurantMiddleware(),
 		middlewares.UserTypeMiddleware(models.UserTypeAdmin, models.UserTypeManager),
 		tableHandler.Create)
-	restaurantsApi.PUT("/:restaurant_id/tables/:table_id",
+	restaurantsApi.PUT("/tables/:table_id",
 		middlewares.RestaurantMiddleware(),
 		middlewares.UserTypeMiddleware(models.UserTypeAdmin, models.UserTypeManager),
 		tableHandler.Update)
-	restaurantsApi.DELETE("/:restaurant_id/tables/:table_id",
+	restaurantsApi.DELETE("/tables/:table_id",
 		middlewares.RestaurantMiddleware(),
 		middlewares.UserTypeMiddleware(models.UserTypeAdmin),
 		tableHandler.Delete)
-	restaurantsApi.PATCH("/:restaurant_id/tables/:table_id/status",
+	restaurantsApi.PATCH("/tables/:table_id/status",
 		middlewares.RestaurantMiddleware(),
 		tableHandler.UpdateStatus)
 
 	// Rotas de pedidos (agrupadas por restaurante)
-	restaurantsApi.GET("/:restaurant_id/orders", middlewares.RestaurantMiddleware(), orderHandler.List)
-	restaurantsApi.GET("/:restaurant_id/orders/:order_id", middlewares.RestaurantMiddleware(), orderHandler.GetByID)
-	restaurantsApi.POST("/:restaurant_id/orders", middlewares.RestaurantMiddleware(), orderHandler.Create)
-	restaurantsApi.PATCH("/:restaurant_id/orders/:order_id/status", middlewares.RestaurantMiddleware(), orderHandler.UpdateStatus)
-	restaurantsApi.POST("/:restaurant_id/orders/:order_id/items", middlewares.RestaurantMiddleware(), orderHandler.AddItem)
-	restaurantsApi.DELETE("/:restaurant_id/orders/:order_id/items/:item_id", middlewares.RestaurantMiddleware(), orderHandler.RemoveItem)
+	restaurantsApi.GET("/orders", middlewares.RestaurantMiddleware(), orderHandler.List)
+	restaurantsApi.GET("/orders/:order_id", middlewares.RestaurantMiddleware(), orderHandler.GetByID)
+	restaurantsApi.POST("/orders", middlewares.RestaurantMiddleware(), orderHandler.Create)
+	restaurantsApi.POST("/orders/delivery", middlewares.RestaurantMiddleware(), orderHandler.CreateOrderDelivery)
+	restaurantsApi.PATCH("/orders/:order_id/status", middlewares.RestaurantMiddleware(), orderHandler.UpdateStatus)
+	restaurantsApi.POST("/orders/:order_id/items", middlewares.RestaurantMiddleware(), orderHandler.AddItem)
+	restaurantsApi.DELETE("/orders/:order_id/items/:item_id", middlewares.RestaurantMiddleware(), orderHandler.RemoveItem)
 
-	restaurantsApi.GET("/:restaurant_id/delivery/today", orderHandler.FindTodayDeliveryOrders)
-	restaurantsApi.GET("/:restaurant_id/delivery/by-date", orderHandler.FindDeliveryOrdersByDate)
-	restaurantsApi.GET("/:restaurant_id/delivery/by-type-and-date", orderHandler.FindOrdersByDateAndType)
-	restaurantsApi.GET("/:restaurant_id/delivery/by-date-range", orderHandler.FindOrdersByDateRangeAndType)
+	restaurantsApi.GET("/delivery/today", orderHandler.FindTodayDeliveryOrders)
+	restaurantsApi.GET("/delivery/by-date", orderHandler.FindDeliveryOrdersByDate)
+	restaurantsApi.GET("/delivery/by-type-and-date", orderHandler.FindOrdersByDateAndType)
+	restaurantsApi.GET("/delivery/by-date-range", orderHandler.FindOrdersByDateRangeAndType)
 
 	// Rotas de produtos (agrupadas por restaurante)
-	restaurantsApi.GET("/:restaurant_id/products", middlewares.RestaurantMiddleware(), productHandler.List)
-	restaurantsApi.GET("/:restaurant_id/products/:product_id", middlewares.RestaurantMiddleware(), productHandler.GetByID)
-	restaurantsApi.POST("/:restaurant_id/products",
+	restaurantsApi.GET("/products", middlewares.RestaurantMiddleware(), productHandler.List)
+	restaurantsApi.GET("/products/:product_id", middlewares.RestaurantMiddleware(), productHandler.GetByID)
+	restaurantsApi.POST("/products",
 		middlewares.RestaurantMiddleware(),
 		middlewares.UserTypeMiddleware(models.UserTypeAdmin, models.UserTypeManager),
 		productHandler.Create)
-	restaurantsApi.PUT("/:restaurant_id/products/:product_id",
+	restaurantsApi.PUT("/products/:product_id",
 		middlewares.RestaurantMiddleware(),
 		middlewares.UserTypeMiddleware(models.UserTypeAdmin, models.UserTypeManager),
 		productHandler.Update)
-	restaurantsApi.DELETE("/:restaurant_id/products/:product_id",
+	restaurantsApi.DELETE("/products/:product_id",
 		middlewares.RestaurantMiddleware(),
 		middlewares.UserTypeMiddleware(models.UserTypeAdmin),
 		productHandler.Delete)
-	restaurantsApi.PATCH("/:restaurant_id/products/:product_id/stock",
+	restaurantsApi.PATCH("/products/:product_id/stock",
 		middlewares.RestaurantMiddleware(),
 		middlewares.UserTypeMiddleware(models.UserTypeAdmin, models.UserTypeManager),
 		productHandler.UpdateStock)
 
 	// Rotas de finanças (agrupadas por restaurante)
-	financeApi := restaurantsApi.Group("/:restaurant_id/finance")
+	financeApi := restaurantsApi.Group("/finance")
 	financeApi.Use(middlewares.RestaurantMiddleware())
 	financeApi.Use(middlewares.UserTypeMiddleware(models.UserTypeAdmin, models.UserTypeManager))
 

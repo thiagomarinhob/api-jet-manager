@@ -43,7 +43,7 @@ func LoadConfig() (*Config, error) {
 		GinMode:       getEnv("GIN_MODE", "debug"),
 
 		// Banco de dados
-		BLUEPRINT_DB_HOST:     getEnv("DB_HOST", "psql_bp"),
+		BLUEPRINT_DB_HOST:     getEnv("DB_HOST", "localhost"),
 		BLUEPRINT_DB_PORT:     dbPort,
 		BLUEPRINT_DB_USERNAME: getEnv("DB_USER", "docker"),
 		BLUEPRINT_DB_PASSWORD: getEnv("DB_PASSWORD", "docker"),
