@@ -11,7 +11,72 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
+
+// Gerenciador de WebSocket
+type WebSocketManager struct {
+	clients    map[*websocket.Conn]bool
+	broadcast  chan *models.Order
+	register   chan *websocket.Conn
+	unregister chan *websocket.Conn
+}
+
+// Nova instância do WebSocketManager
+func NewWebSocketManager() *WebSocketManager {
+	return &WebSocketManager{
+		clients:    make(map[*websocket.Conn]bool),
+		broadcast:  make(chan *models.Order),
+		register:   make(chan *websocket.Conn),
+		unregister: make(chan *websocket.Conn),
+	}
+}
+
+// Gerencia conexões WebSocket
+func (manager *WebSocketManager) Run() {
+	for {
+		select {
+		case conn := <-manager.register:
+			manager.clients[conn] = true
+		case conn := <-manager.unregister:
+			if _, ok := manager.clients[conn]; ok {
+				delete(manager.clients, conn)
+				conn.Close()
+			}
+		case message := <-manager.broadcast:
+			for client := range manager.clients {
+				err := client.WriteJSON(message)
+				if err != nil {
+					client.Close()
+					delete(manager.clients, client)
+				}
+			}
+		}
+	}
+}
+
+// WebSocket endpoint
+func (manager *WebSocketManager) ServeWebSocket(c *gin.Context) {
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		fmt.Println("Erro ao conectar WebSocket:", err)
+		return
+	}
+
+	manager.register <- conn
+
+	// defer func() {
+	// 	manager.unregister <- conn
+	// }()
+}
 
 // ProductCodeGenerator gerencia a geração de códigos de produto
 type ProductCodeGenerator struct {
@@ -64,17 +129,28 @@ type OrderRequest struct {
 	Notes      string             `json:"notes"`
 }
 
-type OrderHandler struct {
-	orderService  *services.OrderService
-	tableService  *services.TableService
-	codeGenerator *ProductCodeGenerator
+type OrderDeliveryRequest struct {
+	OrderItems      []OrderItemRequest `json:"order_items" binding:"required,dive"`
+	CustomerName    string             `json:"customer_name"`
+	CustomerPhone   string             `json:"customer_phone"`
+	CustomerEmail   string             `json:"customer_email"`
+	Notes           string             `json:"notes"`
+	DeliveryAddress string             `json:"delivery_address"`
 }
 
-func NewOrderHandler(orderService *services.OrderService, tableService *services.TableService) *OrderHandler {
+type OrderHandler struct {
+	orderService     *services.OrderService
+	tableService     *services.TableService
+	codeGenerator    *ProductCodeGenerator
+	webSocketManager *WebSocketManager
+}
+
+func NewOrderHandler(orderService *services.OrderService, tableService *services.TableService, webSocketManager *WebSocketManager) *OrderHandler {
 	return &OrderHandler{
-		orderService:  orderService,
-		tableService:  tableService,
-		codeGenerator: NewProductCodeGenerator(),
+		orderService:     orderService,
+		tableService:     tableService,
+		codeGenerator:    NewProductCodeGenerator(),
+		webSocketManager: webSocketManager,
 	}
 }
 
@@ -85,20 +161,27 @@ func (h *OrderHandler) Create(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
+	userIDRaw, _ := c.Get("user_id")
+	userIDPtr, ok := userIDRaw.(*uuid.UUID)
+	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 		return
 	}
 
-	restaurant_id, existRest := c.Get("restaurant_id")
-	if !existRest {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+	userID := *userIDPtr
+
+	restaurantIDRaw, _ := c.Get("restaurant_id")
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID is nil"})
+		return
 	}
 
+	restaurantId := *restaurantIDPtr
+
 	// Verificar se a mesa existe e está livre
-	if req.TableID == nil {
-		table, err := h.tableService.GetByID(restaurant_id.(uuid.UUID), *req.TableID)
+	if req.TableID != nil {
+		table, err := h.tableService.GetByID(restaurantId, *req.TableID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "table not found"})
 			return
@@ -115,7 +198,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 
 	order := &models.Order{
 		TableID: req.TableID,
-		UserID:  userID.(uuid.UUID),
+		UserID:  userID,
 		Status:  models.OrderStatusPending,
 		Notes:   req.Notes,
 		Code:    orderCode,
@@ -124,7 +207,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 	// Processar itens do pedido
 	orderItems := make([]models.OrderItem, 0, len(req.OrderItems))
 	for _, item := range req.OrderItems {
-		product, err := h.orderService.GetProductByID(restaurant_id.(uuid.UUID), item.ProductID)
+		product, err := h.orderService.GetProductByID(restaurantId, item.ProductID)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "product not found: " + item.ProductID.String()})
 			return
@@ -149,8 +232,8 @@ func (h *OrderHandler) Create(c *gin.Context) {
 	}
 
 	// Atualizar status da mesa se o pedido estiver associado a uma mesa
-	if req.TableID == nil {
-		if err := h.tableService.UpdateStatus(restaurant_id.(uuid.UUID), *req.TableID, models.TableStatusOccupied); err != nil {
+	if req.TableID != nil {
+		if err := h.tableService.UpdateStatus(restaurantId, *req.TableID, models.TableStatusOccupied); err != nil {
 			// Log do erro, mas não falha a criação do pedido
 			c.JSON(http.StatusCreated, gin.H{
 				"order":   order,
@@ -159,7 +242,7 @@ func (h *OrderHandler) Create(c *gin.Context) {
 			return
 		}
 
-		if err := h.tableService.SetCurrentOrder(restaurant_id.(uuid.UUID), *req.TableID, &order.ID); err != nil {
+		if err := h.tableService.SetCurrentOrder(restaurantId, *req.TableID, &order.ID); err != nil {
 			c.JSON(http.StatusCreated, gin.H{
 				"order":   order,
 				"warning": "order created but failed to link order to table",
@@ -167,6 +250,94 @@ func (h *OrderHandler) Create(c *gin.Context) {
 			return
 		}
 	}
+
+	c.JSON(http.StatusCreated, order)
+}
+
+func (h *OrderHandler) CreateOrderDelivery(c *gin.Context) {
+	var req OrderDeliveryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	var userID uuid.UUID
+	userIDRaw, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user ID not found in context"})
+		return
+	}
+
+	userIDStr := userIDRaw.(string)
+	parsedID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid user ID format"})
+		return
+	}
+	userID = parsedID
+
+	var restaurantId uuid.UUID
+	restaurantIDRaw, exists := c.Get("restaurant_id")
+	if !exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID not found in context"})
+		return
+	}
+
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("restaurant ID in context is not *uuid.UUID, but %T", restaurantIDRaw)})
+		return
+	}
+
+	if restaurantIDPtr == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID pointer in context is nil"})
+		return
+	}
+	restaurantId = *restaurantIDPtr // Desreferencia o ponteiro para obter o valor uuid.UUID
+
+	orderCode := h.codeGenerator.GenerateCode()
+
+	order := &models.Order{
+		UserID:        userID,
+		RestaurantID:  restaurantId,
+		Status:        models.OrderStatusPending,
+		Notes:         req.Notes,
+		CustomerName:  req.CustomerName,
+		CustomerPhone: req.CustomerPhone,
+		CustomerEmail: req.CustomerEmail,
+		Code:          orderCode,
+		Type:          models.OrderTypeDelivery,
+	}
+
+	orderItems := make([]models.OrderItem, 0, len(req.OrderItems))
+	for _, item := range req.OrderItems {
+		product, err := h.orderService.GetProductByID(restaurantId, item.ProductID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "product not found: " + item.ProductID.String()})
+			return
+		}
+
+		if !product.InStock {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "product out of stock: " + product.Name})
+			return
+		}
+
+		orderItems = append(orderItems, models.OrderItem{
+			ProductID: item.ProductID,
+			Quantity:  item.Quantity,
+			Price:     product.Price,
+			Notes:     item.Notes,
+		})
+	}
+
+	if err := h.orderService.CreateOrder(order, orderItems); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	order.OrderItems = orderItems
+
+	h.webSocketManager.broadcast <- order
 
 	c.JSON(http.StatusCreated, order)
 }
@@ -209,17 +380,14 @@ func (h *OrderHandler) List(c *gin.Context) {
 	tableID := c.Query("table_id")
 	status := c.Query("status")
 
-	restaurant_id := c.Param("restaurant_id")
-	if restaurant_id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID"})
+	restaurantIDRaw, _ := c.Get("restaurant_id")
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID is nil"})
 		return
 	}
 
-	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
-	if errRes != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant UUID"})
-		return
-	}
+	restaurantId := *restaurantIDPtr
 
 	var orders []models.Order
 	var err error
@@ -231,7 +399,7 @@ func (h *OrderHandler) List(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
 			return
 		}
-		orders, err = h.orderService.GetByTable(restaurant_uuid, tableUUID)
+		orders, err = h.orderService.GetByTable(restaurantId, tableUUID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch orders"})
 			return
@@ -257,14 +425,14 @@ func (h *OrderHandler) List(c *gin.Context) {
 			return
 		}
 
-		orders, err = h.orderService.GetByStatus(restaurant_uuid, orderStatus)
+		orders, err = h.orderService.GetByStatus(restaurantId, orderStatus)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch orders"})
 			return
 		}
 	} else {
 		// Listar todos
-		orders, err = h.orderService.List(restaurant_uuid)
+		orders, err = h.orderService.List(restaurantId)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch orders"})
 			return
@@ -281,17 +449,14 @@ func (h *OrderHandler) UpdateStatus(c *gin.Context) {
 		return
 	}
 
-	restaurant_id := c.Param("restaurant_id")
-	if restaurant_id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
+	restaurantIDRaw, _ := c.Get("restaurant_id")
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID is nil"})
 		return
 	}
 
-	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
-	if errRes != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
-		return
-	}
+	restaurantID := *restaurantIDPtr
 
 	var req struct {
 		Status string `json:"status" binding:"required"`
@@ -325,7 +490,7 @@ func (h *OrderHandler) UpdateStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid order ID"})
 		return
 	}
-	order, err := h.orderService.GetByID(restaurant_uuid, orderID)
+	order, err := h.orderService.GetByID(restaurantID, orderID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
 		return
@@ -350,7 +515,7 @@ func (h *OrderHandler) UpdateStatus(c *gin.Context) {
 
 		// Liberar mesa se o pedido estiver vinculado a uma
 		if order.TableID == nil {
-			if err := h.tableService.UpdateStatus(restaurant_uuid, *order.TableID, models.TableStatusFree); err != nil {
+			if err := h.tableService.UpdateStatus(restaurantID, *order.TableID, models.TableStatusFree); err != nil {
 				c.JSON(http.StatusOK, gin.H{
 					"message": "order status updated but failed to free table",
 				})
@@ -359,7 +524,7 @@ func (h *OrderHandler) UpdateStatus(c *gin.Context) {
 
 			// Remover associação com o pedido atual
 			var nilOrderID *uuid.UUID
-			if err := h.tableService.SetCurrentOrder(restaurant_uuid, *order.TableID, nilOrderID); err != nil {
+			if err := h.tableService.SetCurrentOrder(restaurantID, *order.TableID, nilOrderID); err != nil {
 				c.JSON(http.StatusOK, gin.H{
 					"message": "order status updated but failed to unlink order from table",
 				})
@@ -368,7 +533,7 @@ func (h *OrderHandler) UpdateStatus(c *gin.Context) {
 		}
 	}
 
-	if err := h.orderService.UpdateStatus(restaurant_uuid, orderID, status); err != nil {
+	if err := h.orderService.UpdateStatus(restaurantID, orderID, status); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -617,19 +782,15 @@ func (h *OrderHandler) FindOrdersByDateAndType(c *gin.Context) {
 
 // FindTodayDeliveryOrders handler para buscar pedidos de delivery do dia atual
 func (h *OrderHandler) FindTodayDeliveryOrders(c *gin.Context) {
-	restaurant_id := c.Param("restaurant_id")
-	if restaurant_id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID"})
+	restaurantIDRaw, _ := c.Get("restaurant_id")
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID is nil"})
 		return
 	}
+	restaurantID := *restaurantIDPtr
 
-	restaurant_uuid, errRes := uuid.Parse(restaurant_id)
-	if errRes != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant UUID"})
-		return
-	}
-
-	orders, err := h.orderService.FindTodayDeliveryOrders(restaurant_uuid)
+	orders, err := h.orderService.FindTodayDeliveryOrders(restaurantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Erro ao buscar pedidos de delivery de hoje: " + err.Error(),

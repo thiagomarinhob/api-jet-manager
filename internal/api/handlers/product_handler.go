@@ -129,7 +129,15 @@ func (h *ProductHandler) Create(c *gin.Context) {
 }
 
 func (h *ProductHandler) GetByID(c *gin.Context) {
-	// Obtém o ID do produto da URL
+	restaurantIDRaw, _ := c.Get("restaurant_id")
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID is nil"})
+		return
+	}
+
+	restaurantID := *restaurantIDPtr
+
 	productID := c.Param("product_id")
 	if productID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "product ID is required"})
@@ -143,19 +151,7 @@ func (h *ProductHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	restaurant_id := c.Param("restaurant_id")
-	if restaurant_id == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
-		return
-	}
-
-	restaurant_uuid, err := uuid.Parse(restaurant_id)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid table ID"})
-		return
-	}
-
-	product, err := h.productService.GetByID(restaurant_uuid, prodUUID)
+	product, err := h.productService.GetByID(restaurantID, prodUUID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "product not found"})
 		return
@@ -166,24 +162,20 @@ func (h *ProductHandler) GetByID(c *gin.Context) {
 
 func (h *ProductHandler) List(c *gin.Context) {
 	// Obtém o restaurant_id do contexto
-	restaurantID, exists := c.Get("requested_restaurant_id")
+	restaurantID, exists := c.Get("restaurant_id")
 	if !exists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID not found"})
 		return
 	}
 
 	// Converte para UUID
-	restID, ok := restaurantID.(string)
+	restID, ok := restaurantID.(*uuid.UUID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID format"})
 		return
 	}
 
-	restaurantUUID, err := uuid.Parse(restID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID"})
-		return
-	}
+	restaurantUUID := *restID
 
 	// Parâmetros de paginação
 	pageStr := c.DefaultQuery("page", "1")

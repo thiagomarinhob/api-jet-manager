@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 
 	"api-jet-manager/internal/domain/models"
@@ -79,8 +78,6 @@ func (h *RestaurantHandler) Create(c *gin.Context) {
 
 // GetByID - superadmins podem ver qualquer restaurante, outros apenas o seu
 func (h *RestaurantHandler) GetByID(c *gin.Context) {
-	verifyRestaurant, _ := c.Get("restaurant_id")
-	fmt.Println(verifyRestaurant)
 	id := c.Param("restaurant_id")
 	if id == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID"})
@@ -106,8 +103,12 @@ func (h *RestaurantHandler) GetByID(c *gin.Context) {
 func (h *RestaurantHandler) List(c *gin.Context) {
 	// Verifique se é um superadmin
 	userType, _ := c.Get("user_type")
-	restaurantID, _ := c.Get("restaurant_id")
-
+	restaurantIDRaw, _ := c.Get("restaurant_id")
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID is nil"})
+		return
+	}
 	// Se for superadmin, liste todos os restaurantes
 	if userType.(models.UserType) == models.UserTypeSuperAdmin {
 		// Filtro opcional por status
@@ -146,19 +147,16 @@ func (h *RestaurantHandler) List(c *gin.Context) {
 		return
 	}
 
-	// Se não for superadmin, retorna apenas o restaurante do usuário
-	if restaurantID == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "you don't have a restaurant assigned"})
-		return
-	}
+	restaurantID := *restaurantIDPtr
 
-	restaurant, err := h.restaurantService.GetByID(restaurantID.(uuid.UUID))
+	restaurant, err := h.restaurantService.GetByID(restaurantID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "restaurant not found"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve restaurant"})
 		return
 	}
 
-	c.JSON(http.StatusOK, []models.Restaurant{*restaurant})
+	c.JSON(http.StatusOK, gin.H{"restaurant": restaurant})
+
 }
 
 // Update - superadmins podem atualizar qualquer restaurante, admins apenas o seu

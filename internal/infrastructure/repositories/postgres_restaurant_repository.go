@@ -2,7 +2,6 @@ package repositories
 
 import (
 	"errors"
-	"fmt"
 
 	"api-jet-manager/internal/domain/models"
 	"api-jet-manager/internal/infrastructure/database"
@@ -27,7 +26,6 @@ func (r *PostgresRestaurantRepository) Create(restaurant *models.Restaurant) err
 
 func (r *PostgresRestaurantRepository) FindByID(id uuid.UUID) (*models.Restaurant, error) {
 	var restaurant models.Restaurant
-	fmt.Print("id repository", id)
 	if err := r.DB.Where("id = ?", id).First(&restaurant).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("restaurant not found")

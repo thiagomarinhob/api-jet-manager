@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -121,24 +122,19 @@ func (h *ProductCategoryHandler) GetByID(c *gin.Context) {
 // List lista todas as categorias de um restaurante com paginação e filtros
 func (h *ProductCategoryHandler) List(c *gin.Context) {
 	// Obtém o restaurant_id do contexto
-	restaurantID, exists := c.Get("requested_restaurant_id")
-	if !exists {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID not found"})
-		return
-	}
-
-	// Converte para UUID
-	restID, ok := restaurantID.(string)
+	var restaurantId uuid.UUID
+	restaurantIDRaw, _ := c.Get("restaurant_id")
+	restaurantIDPtr, ok := restaurantIDRaw.(*uuid.UUID)
 	if !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("restaurant ID in context is not *uuid.UUID, but %T", restaurantIDRaw)})
 		return
 	}
 
-	restaurantUUID, err := uuid.Parse(restID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid restaurant ID"})
+	if restaurantIDPtr == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "restaurant ID pointer in context is nil"})
 		return
 	}
+	restaurantId = *restaurantIDPtr
 
 	// Parâmetros de paginação
 	pageStr := c.DefaultQuery("page", "1")
@@ -174,7 +170,7 @@ func (h *ProductCategoryHandler) List(c *gin.Context) {
 
 	// Buscar categorias com paginação e filtros
 	categories, totalItems, err := h.categoryService.FindWithFilters(
-		restaurantUUID,
+		restaurantId,
 		offset,
 		pageSize,
 		active,
